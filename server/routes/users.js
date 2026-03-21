@@ -1,12 +1,12 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/user.js";
-import { protect } from "../middleware/auth.js";
+import { protect, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
 // GET all users
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, requireAdmin, async (req, res) => {
   try {
     const users = await User.find().select("-password").sort({ createdAt: -1 });
     res.json(users);
@@ -16,7 +16,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // POST create new user
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, requireAdmin, async (req, res) => {
   const { email, firstName, lastName, role, password } = req.body;
   try {
     const existing = await User.findOne({ email });
@@ -45,7 +45,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // PUT update user
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, requireAdmin, async (req, res) => {
   const { firstName, lastName, role, password } = req.body;
   try {
     const fullName = `${firstName} ${lastName}`.trim();
@@ -68,7 +68,7 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // DELETE user
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, requireAdmin, async (req, res) => {
   try {
     const deleted = await User.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "User not found" });

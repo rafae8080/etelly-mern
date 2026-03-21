@@ -19,7 +19,6 @@ export default function AlertTile({
     if (type === "Flood") return Waves;
     if (type === "Fire") return Flame;
     if (type === "Earthquake") return Stone;
-    if (type === "Seawall break") return BrickWall;
     return Info;
   };
 

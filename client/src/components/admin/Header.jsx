@@ -6,6 +6,17 @@ export default function Header({ userEmail = "", onLogout }) {
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  const userRole = localStorage.getItem("user")
+    ? JSON.parse(localStorage.getItem("user")).role
+    : null;
+
+  const roleLabel =
+    userRole === "admin"
+      ? "Admin"
+      : userRole === "barangay_official"
+        ? "Barangay Official"
+        : "User";
+
   const handleLogout = () => {
     // ✅ Clear token and user from localStorage
     localStorage.removeItem("token");
@@ -33,7 +44,7 @@ export default function Header({ userEmail = "", onLogout }) {
                 <p className="text-sm font-medium">
                   {userEmail || "Admin User"}
                 </p>
-                <p className="text-xs text-gray-500">Admin</p>
+                <p className="text-xs text-gray-500">{roleLabel}</p>
               </div>
               <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                 <User size={20} className="text-blue-600" />

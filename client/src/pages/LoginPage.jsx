@@ -42,7 +42,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-[url('/images/navotas.jpg')] bg-cover bg-center" />
       <div className="absolute inset-0 bg-black/60" />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-4xl flex h-120">
+      <div className="relative bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-4xl flex h-[430px]">
         {/* Left - Login Form */}
         <div className="w-1/2 p-12 flex flex-col justify-center">
           <form
@@ -137,7 +137,7 @@ export default function LoginPage() {
         {/* Right - Branding */}
         <div className="w-1/2 bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white flex items-center justify-center flex-col p-10">
           <img
-            src="/images/logtell1.png"
+            src="src/images/logtell1.png"
             alt="E-Telly Logo"
             className="w-37 h-40 mb-4"
           />

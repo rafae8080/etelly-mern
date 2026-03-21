@@ -21,8 +21,6 @@ const menuItems = [
   { icon: Bell, label: "Alerts", href: "/alerts" },
   { icon: Volume2, label: "Reports", href: "/reports" },
   { icon: Map, label: "Hazard Map", href: "/hazard-map" },
-  { icon: Droplets, label: "Flood Prediction", href: "/flood-prediction" },
-  { icon: Dam, label: "Dam Monitoring", href: "/dam-monitoring" },
   { icon: MapPin, label: "Evacuation Centers", href: "/evacuation" },
   { icon: Package, label: "Resources", href: "/resources" },
   {
@@ -31,12 +29,25 @@ const menuItems = [
     href: "/community-sharing",
   },
   { icon: InfoIcon, label: "Safety Tips", href: "/safety-tips" },
-  { icon: Users, label: "Manage Users", href: "/manage-users" },
+  {
+    icon: Users,
+    label: "Manage Users",
+    href: "/manage-users",
+    adminOnly: true,
+  },
 ];
 
 export default function Sidebar() {
   const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+
+  const userRole = localStorage.getItem("user")
+    ? JSON.parse(localStorage.getItem("user")).role
+    : null;
+
+  const visibleMenuItems = menuItems.filter(
+    (item) => !item.adminOnly || userRole === "admin",
+  );
 
   return (
     <>
@@ -73,7 +84,7 @@ export default function Sidebar() {
 
           {/* Navigation */}
           <nav className="space-y-2">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
 

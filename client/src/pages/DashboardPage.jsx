@@ -35,20 +35,6 @@ const modules = [
     color: "bg-orange-500",
   },
   {
-    title: "Flood Prediction",
-    description: "View areas likely to be flooded",
-    icon: Waves,
-    href: "/flood-prediction",
-    color: "bg-blue-500",
-  },
-  {
-    title: "Dam Monitoring",
-    description: "Monitor dam conditions and safety",
-    icon: Dam,
-    href: "/dam-monitoring",
-    color: "bg-blue-300",
-  },
-  {
     title: "Evacuation Centers",
     description: "Manage evacuation center locations",
     icon: MapPin,
@@ -82,10 +68,19 @@ const modules = [
     icon: Users,
     href: "/manage-users",
     color: "bg-gray-600",
+    adminOnly: true,
   },
 ];
 
 export default function DashboardPage() {
+  const userRole = localStorage.getItem("user")
+    ? JSON.parse(localStorage.getItem("user")).role
+    : null;
+
+  const visibleModules = modules.filter(
+    (module) => !module.adminOnly || userRole === "admin",
+  );
+
   return (
     <div>
       {/* Page Header */}
@@ -118,7 +113,7 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {modules.map((module) => (
+          {visibleModules.map((module) => (
             <DashboardCard key={module.href} {...module} />
           ))}
         </div>

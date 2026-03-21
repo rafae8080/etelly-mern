@@ -10,6 +10,7 @@ import CommunitySharingPage from "./pages/CommunitySharingPage";
 import SafetyTipsPage from "./pages/SafetyTipsPage";
 import ResourcesPage from "./pages/ResourcesPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
+import ReportsPage from "./pages/ReportPage";
 
 // ✅ Redirect to dashboard if already logged in
 function PublicRoute({ children }) {
@@ -23,7 +24,8 @@ function ProtectedRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
-export default function App() {
+// ✅ Moved outside App to prevent remounts on every render
+function ProtectedLayout({ Page }) {
   const userEmail = localStorage.getItem("user")
     ? JSON.parse(localStorage.getItem("user")).email
     : "";
@@ -33,14 +35,16 @@ export default function App() {
     localStorage.removeItem("user");
   };
 
-  const withLayout = (Page) => (
+  return (
     <ProtectedRoute>
       <AdminLayout userEmail={userEmail} onLogout={handleLogout}>
         <Page />
       </AdminLayout>
     </ProtectedRoute>
   );
+}
 
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
@@ -58,17 +62,39 @@ export default function App() {
         />
 
         {/* Protected admin pages */}
-        <Route path="/dashboard" element={withLayout(DashboardPage)} />
-        <Route path="/alerts" element={withLayout(AlertsPage)} />
-        <Route path="/hazard-map" element={withLayout(HazardMapPage)} />
-        <Route path="/evacuation" element={withLayout(EvacuationPage)} />
+        <Route
+          path="/dashboard"
+          element={<ProtectedLayout Page={DashboardPage} />}
+        />
+        <Route path="/alerts" element={<ProtectedLayout Page={AlertsPage} />} />
+        <Route
+          path="/reports"
+          element={<ProtectedLayout Page={ReportsPage} />}
+        />
+        <Route
+          path="/hazard-map"
+          element={<ProtectedLayout Page={HazardMapPage} />}
+        />
+        <Route
+          path="/evacuation"
+          element={<ProtectedLayout Page={EvacuationPage} />}
+        />
         <Route
           path="/community-sharing"
-          element={withLayout(CommunitySharingPage)}
+          element={<ProtectedLayout Page={CommunitySharingPage} />}
         />
-        <Route path="/safety-tips" element={withLayout(SafetyTipsPage)} />
-        <Route path="/resources" element={withLayout(ResourcesPage)} />
-        <Route path="/manage-users" element={withLayout(ManageUsersPage)} />
+        <Route
+          path="/safety-tips"
+          element={<ProtectedLayout Page={SafetyTipsPage} />}
+        />
+        <Route
+          path="/resources"
+          element={<ProtectedLayout Page={ResourcesPage} />}
+        />
+        <Route
+          path="/manage-users"
+          element={<ProtectedLayout Page={ManageUsersPage} />}
+        />
 
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/login" replace />} />

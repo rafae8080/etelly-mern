@@ -13,7 +13,7 @@ export default function EvacuationCentersPage() {
       totalCapacity: 200,
       capacityBgColor: "bg-green-50",
       capacityTextColor: "text-green-600",
-      image: "/images/building.png",
+      image: "src/images/building.png",
     },
     {
       id: 2,
@@ -26,7 +26,7 @@ export default function EvacuationCentersPage() {
       totalCapacity: 250,
       capacityBgColor: "bg-orange-50",
       capacityTextColor: "text-orange-600",
-      image: "/images/building.png",
+      image: "src/images/building.png",
     },
     {
       id: 3,
@@ -39,7 +39,7 @@ export default function EvacuationCentersPage() {
       totalCapacity: 255,
       capacityBgColor: "bg-red-50",
       capacityTextColor: "text-red-600",
-      image: "/images/building.png",
+      image: "src/images/building.png",
     },
     {
       id: 4,
@@ -52,7 +52,7 @@ export default function EvacuationCentersPage() {
       totalCapacity: 255,
       capacityBgColor: "bg-red-50",
       capacityTextColor: "text-red-600",
-      image: "/images/building.png",
+      image: "src/images/building.png",
     },
   ];
 
