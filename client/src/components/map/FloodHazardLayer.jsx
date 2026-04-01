@@ -1,0 +1,21 @@
+import { WMSTileLayer } from "react-leaflet";
+
+const LIPAD_WMS_URL = "https://lipad-fmc.dream.upd.edu.ph/geoserver/wms";
+
+const FloodHazardLayer = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <WMSTileLayer
+      url={LIPAD_WMS_URL}
+      layers="geonode:manila_fh100yr_10m"
+      format="image/png"
+      transparent={true}
+      opacity={0.75}
+      version="1.1.1"
+      attribution='&copy; <a href="https://lipad-fmc.dream.upd.edu.ph">Phil-LiDAR 1 / UP DREAM</a>'
+    />
+  );
+};
+
+export default FloodHazardLayer;

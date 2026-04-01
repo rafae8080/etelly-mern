@@ -1,56 +1,173 @@
+import { useState, useEffect, useRef } from "react";
+import { useMap } from "react-leaflet";
+import { Crosshair } from "lucide-react";
+import BaseMap from "../components/map/BaseMap";
+import MapStatusBar from "../components/map/MapStatusBar";
+import FloodLayer, { UserLocationMarker } from "../components/map/FloodLayer";
+import FloodHazardLayer from "../components/map/FloodHazardLayer";
+import FloodForecastPanel from "../components/map/FloodForecastPanel";
+import LayerControlPanel from "../components/map/LayerControlPanel";
+import HazardLegend from "../components/map/HazardLegend";
+
+const CITY_CENTER = [14.664, 120.9422];
+const CITY_NAME = "Navotas, Metro Manila";
+const CITY_ZOOM = 14;
+
+function MapReadyHandler({ onReady }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const t = setTimeout(onReady, 800);
+    return () => clearTimeout(t);
+  }, [map, onReady]);
+  return null;
+}
+
+function FlyToUser({ trigger, userPos }) {
+  const map = useMap();
+  const prevTrigger = useRef(0);
+
+  useEffect(() => {
+    if (trigger === prevTrigger.current) return;
+    prevTrigger.current = trigger;
+    if (userPos) map.flyTo(userPos, 17, { duration: 1.2 });
+  }, [trigger, userPos, map]);
+
+  return null;
+}
+
+const INITIAL_LAYERS = {
+  flood: true,
+  earthquake: false,
+  fire: false,
+  landslide: false,
+  reports: false,
+};
+
 export default function HazardMapPage() {
+  const [layers, setLayers] = useState(INITIAL_LAYERS);
+  const [basemap, setBasemap] = useState("light");
+  const [loading, setLoading] = useState(true);
+  const [userPos, setUserPos] = useState(null);
+  const [flyTrigger, setFlyTrigger] = useState(0);
+
+  const toggleLayer = (key) =>
+    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const handleRecenter = () => {
+    if (userPos) setFlyTrigger((n) => n + 1);
+  };
+
+  const activeCount = Object.values(layers).filter(Boolean).length;
+
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Hazard Map</h1>
-
-      <div className="flex gap-4">
-        {/* Zoom Controls */}
-        <div className="flex flex-col gap-2">
-          <button className="w-10 h-10 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors flex items-center justify-center text-gray-700 font-semibold text-xl shadow-sm">
-            +
-          </button>
-          <button className="w-10 h-10 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors flex items-center justify-center text-gray-700 font-semibold text-xl shadow-sm">
-            −
-          </button>
+    <div className="flex flex-col h-full">
+      {/* Title bar */}
+      <div className="mb-4 flex items-center justify-between flex-shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {CITY_NAME} — Disaster Preparedness Viewer
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-sm text-slate-600">
+            {activeCount} layer{activeCount !== 1 ? "s" : ""} active
+          </span>
+        </div>
+      </div>
 
-        {/* Map */}
+      {/* Map wrapper */}
+      <div className="relative flex-1 rounded-2xl overflow-hidden border border-gray-200 shadow-lg min-h-[500px]">
+        {/* Loading overlay */}
+        {loading && (
+          <div
+            className="absolute inset-0 z-[2000] bg-white flex flex-col
+                          items-center justify-center gap-3"
+          >
+            <div
+              className="w-10 h-10 border-2 border-blue-500
+                            border-t-transparent rounded-full animate-spin"
+            />
+            <p className="text-gray-400 text-sm font-medium">
+              Loading hazard map…
+            </p>
+          </div>
+        )}
+
+        {/* Leaflet map */}
+        <BaseMap tileVariant={basemap} center={CITY_CENTER} zoom={CITY_ZOOM}>
+          {/* Flood WMS hazard layer */}
+          <FloodHazardLayer visible={layers.flood} />
+
+          {/* Crowdsourced report circles — future use */}
+          <FloodLayer visible={false} />
+
+          {/* User location dot */}
+          <UserLocationMarker onLocated={setUserPos} />
+
+          {/* Fly to user on recenter press */}
+          <FlyToUser trigger={flyTrigger} userPos={userPos} />
+
+          <MapStatusBar />
+          <MapReadyHandler onReady={() => setLoading(false)} />
+        </BaseMap>
+
+        {/* ── Floating UI panels ── */}
+
+        {/* Top-left city badge */}
         <div
-          className="flex-1 relative bg-gray-300 rounded-xl overflow-hidden"
-          style={{ height: "500px" }}
+          className="absolute top-4 right-4 z-[1000]
+                        bg-white/90 backdrop-blur border border-gray-200
+                        rounded-xl px-3 py-2 flex items-center gap-2
+                        shadow-sm pointer-events-none"
         >
-          <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d25447.630494827325!2d120.90371949757723!3d14.692432804232856!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397b499f04aaccd%3A0x1d5152fd176eb12a!2sTanza%201%2C%20Navotas%2C%20Metro%20Manila!5e1!3m2!1sen!2sph!4v1769610391992!5m2!1sen!2sph"
-            width="100%"
-            height="100%"
-            style={{ border: 0 }}
-            allowFullScreen={true}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            className="absolute inset-0"
-          />
-
-          {/* Legend */}
-          <div className="fixed bottom-6 right-6 bg-white rounded-lg p-4 shadow-lg z-10 w-50">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Severity Level
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 bg-red-700 rounded" />
-                <span className="text-sm text-gray-700">High</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 bg-orange-500 rounded" />
-                <span className="text-sm text-gray-700">Medium</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 bg-green-700 rounded" />
-                <span className="text-sm text-gray-700">Low</span>
-              </div>
-            </div>
+          <span className="text-lg">🇵🇭</span>
+          <div>
+            <p className="text-gray-800 text-xs font-bold leading-none">
+              {CITY_NAME}
+            </p>
+            <p className="text-gray-400 text-[10px] mt-0.5 leading-none">
+              PAGASA · NOAH · USGS
+            </p>
           </div>
         </div>
+
+        {/* Recenter button — below zoom controls top-left */}
+        <button
+          onClick={handleRecenter}
+          title="Go to my location"
+          className={`absolute top-[90px] left-[10px] z-[1000]
+                      w-[30px] h-[30px] bg-white border border-gray-300
+                      flex items-center justify-center shadow-sm
+                      hover:bg-gray-50 transition-colors
+                      ${
+                        userPos
+                          ? "cursor-pointer"
+                          : "opacity-40 cursor-not-allowed"
+                      }`}
+        >
+          <Crosshair
+            size={16}
+            className={userPos ? "text-blue-500" : "text-gray-400"}
+            strokeWidth={1.8}
+          />
+        </button>
+
+        {/* Layer control panel — top right */}
+        <LayerControlPanel
+          layers={layers}
+          onToggleLayer={toggleLayer}
+          basemap={basemap}
+          onBasemapChange={setBasemap}
+        />
+
+        {/* Flood legend — bottom left */}
+        <HazardLegend activeLayers={layers} />
+
+        {/* Flood forecast panel — bottom right */}
+        <FloodForecastPanel visible={layers.flood} />
       </div>
     </div>
   );

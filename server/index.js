@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
+import hazardRoutes from "./routes/hazard.js"; // ← moved here with other imports
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/hazard", hazardRoutes); // ← moved here, AFTER app is created
 
 mongoose
   .connect(process.env.MONGO_URI)
