@@ -18,16 +18,13 @@ export default function Header({ userEmail = "", onLogout }) {
         : "User";
 
   const handleLogout = () => {
-    // ✅ Clear token and user from localStorage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
-    // ✅ Call parent onLogout if provided
     if (onLogout) onLogout();
 
     setShowLogoutConfirm(false);
 
-    // ✅ Replace history so they can't go back
     navigate("/login", { replace: true });
   };
 
@@ -64,9 +61,11 @@ export default function Header({ userEmail = "", onLogout }) {
         </div>
       </header>
 
-      {/* Logout Confirmation Modal */}
+      {/* Logout Confirmation Modal
+          z-[2000] is intentional — Leaflet's controls sit at z-index 1000,
+          its panes at 200-600. We must be above all of them. */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-[2000]">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-2">Confirm Logout</h3>
             <p className="text-gray-600 mb-6">

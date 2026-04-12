@@ -20,9 +20,9 @@ app.use("/api/hazard", hazardRoutes); // ← moved here, AFTER app is created
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
-    console.log("✅ Connected to MongoDB Atlas");
+    console.log(" Connected to MongoDB Atlas");
     app.listen(process.env.PORT, () =>
-      console.log(`🚀 Server running on http://localhost:${process.env.PORT}`),
+      console.log(` Server running on http://localhost:${process.env.PORT}`),
     );
   })
-  .catch((err) => console.error("❌ MongoDB connection failed:", err));
+  .catch((err) => console.error(" MongoDB connection failed:", err));

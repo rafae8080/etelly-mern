@@ -12,19 +12,44 @@ import ResourcesPage from "./pages/ResourcesPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ReportsPage from "./pages/ReportPage";
 
-// ✅ Redirect to dashboard if already logged in
+// ── Token validation ───────────────────────────────────────────────────────────
+// Checks both presence AND expiry of the JWT so stale dev-session tokens
+// don't permanently bypass the login page.
+function isTokenValid() {
+  const token = localStorage.getItem("token");
+  if (!token) return false;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    // exp is in seconds; Date.now() is in milliseconds
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      // Token is expired — clean up so we don't keep checking
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      return false;
+    }
+    return true;
+  } catch {
+    // Token is malformed; treat as invalid
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    return false;
+  }
+}
+
+// ── Route guards ──────────────────────────────────────────────────────────────
+
+// Redirect to dashboard if already logged in (e.g. hitting /login again)
 function PublicRoute({ children }) {
-  const token = localStorage.getItem("token");
-  return token ? <Navigate to="/dashboard" replace /> : children;
+  return isTokenValid() ? <Navigate to="/dashboard" replace /> : children;
 }
 
-// ✅ Redirect to login if NOT logged in
+// Redirect to login if NOT logged in or token expired
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/login" replace />;
+  return isTokenValid() ? children : <Navigate to="/login" replace />;
 }
 
-// ✅ Moved outside App to prevent remounts on every render
+// ── Layout wrapper (moved outside App to prevent remounts on re-render) ───────
 function ProtectedLayout({ Page }) {
   const userEmail = localStorage.getItem("user")
     ? JSON.parse(localStorage.getItem("user")).email
@@ -44,6 +69,7 @@ function ProtectedLayout({ Page }) {
   );
 }
 
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
@@ -51,7 +77,7 @@ export default function App() {
         {/* Root → login or dashboard depending on auth */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Public — if already logged in, go to dashboard */}
+        {/* Public — redirect to dashboard if already authenticated */}
         <Route
           path="/login"
           element={
@@ -61,7 +87,7 @@ export default function App() {
           }
         />
 
-        {/* Protected admin pages */}
+        {/* Protected pages */}
         <Route
           path="/dashboard"
           element={<ProtectedLayout Page={DashboardPage} />}
@@ -96,7 +122,7 @@ export default function App() {
           element={<ProtectedLayout Page={ManageUsersPage} />}
         />
 
-        {/* Catch all */}
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

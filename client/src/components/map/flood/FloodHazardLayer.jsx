@@ -8,7 +8,9 @@ const FloodHazardLayer = ({ visible }) => {
   return (
     <WMSTileLayer
       url={LIPAD_WMS_URL}
-      layers="geonode:manila_fh100yr_10m"
+      // Antipolo City, Rizal — 100-year return period
+      // Layer code: ph045802000 = Antipolo City PSA code
+      layers="geonode:ph045802000_fh25yr_10m"
       format="image/png"
       transparent={true}
       opacity={0.75}

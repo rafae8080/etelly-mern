@@ -13,7 +13,6 @@ const RISK_CONFIG = {
   1: { color: "#15803d", fillColor: "#22c55e", label: "Low Risk", radius: 10 },
 };
 
-// ── User location dot icon ─────────────────────────────────────────────────
 const userDotIcon = L.divIcon({
   className: "",
   html: `
@@ -37,14 +36,12 @@ const userDotIcon = L.divIcon({
   iconAnchor: [10, 10],
 });
 
-// ── User location marker — auto-detects, no auto-fly ──────────────────────
 export const UserLocationMarker = ({ onLocated }) => {
   const [position, setPosition] = useState(null);
   const map = useMap();
 
   useEffect(() => {
     if (!navigator.geolocation) return;
-
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
@@ -72,20 +69,30 @@ export const UserLocationMarker = ({ onLocated }) => {
   );
 };
 
-// ── Flood zone circle markers ──────────────────────────────────────────────
 const FloodLayer = ({ visible }) => {
   const [zones, setZones] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/hazard/flood-zones")
-      .then((r) => r.json())
-      .then((data) => setZones(data.zones))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    if (!visible) return;
 
-  if (!visible || loading) return null;
+    let cancelled = false;
+
+    fetch("/api/hazard/flood-zones")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (!cancelled) setZones(data.zones ?? []);
+      })
+      .catch((err) => console.warn("FloodLayer:", err.message));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
+
+  if (!visible || zones.length === 0) return null;
 
   return (
     <>
