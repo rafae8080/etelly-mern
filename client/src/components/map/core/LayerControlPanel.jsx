@@ -17,6 +17,13 @@ const LAYERS = [
     ring: "ring-purple-400",
   },
   {
+    key: "landslide", // ← ADD THIS
+    label: "Landslide Hazard",
+    Icon: Mountain,
+    activeColor: "bg-amber-500",
+    ring: "ring-amber-400",
+  },
+  {
     key: "earthquake",
     label: "Earthquake",
     Icon: CircleDot,
@@ -32,7 +39,6 @@ const LAYERS = [
     ring: "ring-orange-400",
     disabled: true,
   },
-
   {
     key: "reports",
     label: "Live Reports",

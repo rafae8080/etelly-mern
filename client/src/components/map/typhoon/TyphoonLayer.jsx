@@ -4,19 +4,15 @@ import L from "leaflet";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
 // ── Dev test mode ─────────────────────────────────────────────────────────
-// Add ?dev=true to your localhost URL to inject a fake storm on the map.
-// This lets you verify the marker, wind circle, track line, and popup
-// all render correctly without needing a real active typhoon.
 const IS_DEV_MODE =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("dev") === "true";
 
-// Fake storm based on Typhoon Odette (2021) track — real PAR coordinates
 const DEV_FAKE_STORM = {
   id: "dev-test-001",
   name: "TEST STORM (Dev Mode)",
-  lat: 12.5,
-  lon: 124.8,
+  lat: 14.5,
+  lon: 120.8,
   alertLevel: "orange",
   windKph: 150,
   windKnots: 81,
@@ -33,7 +29,6 @@ const DEV_FAKE_STORM = {
   ],
 };
 
-// ── PAGASA typhoon season info ────────────────────────────────────────────
 const SEASON_DEFS = {
   active: {
     months: [6, 7, 8, 9, 10, 11],
@@ -65,7 +60,6 @@ function getSeasonStatus() {
   return SEASON_DEFS.quiet;
 }
 
-// PAGASA wind signal reference
 const PAGASA_SIGNALS = [
   {
     signal: "Signal #4",
@@ -93,7 +87,6 @@ const PAGASA_SIGNALS = [
   },
 ];
 
-// ── Color maps ────────────────────────────────────────────────────────────
 const ALERT_COLORS = {
   green: {
     stroke: "#16a34a",
@@ -124,32 +117,22 @@ const CATEGORY_COLORS = {
   0: "#9ca3af",
 };
 
-// ── Typhoon eye icon ──────────────────────────────────────────────────────
 const createTyphoonIcon = (color, size = 28) =>
   new L.DivIcon({
     className: "",
     html: `
-      <div style="
-        width:${size}px;height:${size}px;
-        border-radius:50%;
-        background:${color};
-        border:3px solid white;
-        box-shadow:0 0 0 2px ${color},0 2px 8px rgba(0,0,0,0.4);
-        display:flex;align-items:center;justify-content:center;
-      ">
-        <div style="
-          width:${size * 0.35}px;height:${size * 0.35}px;
-          border-radius:50%;
-          background:white;
-          opacity:0.9;
-        "></div>
-      </div>
-    `,
+      <div style="width:${size}px;height:${size}px;border-radius:50%;
+                  background:${color};border:3px solid white;
+                  box-shadow:0 0 0 2px ${color},0 2px 8px rgba(0,0,0,0.4);
+                  display:flex;align-items:center;justify-content:center;">
+        <div style="width:${size * 0.35}px;height:${size * 0.35}px;border-radius:50%;
+                    background:white;opacity:0.9;"></div>
+      </div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
 
-// ── Storm map layer ───────────────────────────────────────────────────────
+// ── StormMapLayer — ONLY Leaflet primitives, no DOM UI ───────────────────
 function StormMapLayer({ storm }) {
   const catColor = CATEGORY_COLORS[storm.category?.level ?? 0];
   const alertCfg = ALERT_COLORS[storm.alertLevel] ?? ALERT_COLORS.green;
@@ -253,13 +236,11 @@ function StormMapLayer({ storm }) {
   );
 }
 
-// ── No-storm panel ────────────────────────────────────────────────────────
+// ── NoStormContent — pure DOM, used inside TyphoonPanel ──────────────────
 function NoStormContent() {
   const season = getSeasonStatus();
-
   return (
     <div className="flex flex-col">
-      {/* Season status badge */}
       <div className={`mx-3 mt-3 mb-2.5 rounded-xl px-3 py-2.5 ${season.bg}`}>
         <div className="flex items-center gap-2 mb-1">
           <span
@@ -276,8 +257,6 @@ function NoStormContent() {
           Responsibility (PAR).
         </p>
       </div>
-
-      {/* PAGASA signal reference */}
       <div className="px-3 pb-1">
         <div className="flex items-center gap-1 mb-2">
           <Info size={9} className="text-gray-400" />
@@ -307,45 +286,39 @@ function NoStormContent() {
           ))}
         </div>
       </div>
-
-      {/* Data sources */}
       <div className="mx-3 mt-2.5 mb-3 border-t border-gray-100 pt-2 flex flex-col gap-1">
         <p className="text-[9px] font-semibold text-gray-400 mb-0.5">
           Data Sources
         </p>
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] text-gray-400">Storm tracking</span>
-          <a
-            href="https://www.gdacs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[9px] text-blue-500 hover:underline"
-          >
-            GDACS
-          </a>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] text-gray-400">PH classification</span>
-          <a
-            href="https://www.pagasa.dost.gov.ph"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[9px] text-blue-500 hover:underline"
-          >
-            PAGASA–DOST
-          </a>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] text-gray-400">Regional alerts</span>
-          <a
-            href="https://www.jma.go.jp/en/typh/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[9px] text-blue-500 hover:underline"
-          >
-            JMA RSMC Tokyo
-          </a>
-        </div>
+        {[
+          {
+            label: "Storm tracking",
+            href: "https://www.gdacs.org",
+            text: "GDACS",
+          },
+          {
+            label: "PH classification",
+            href: "https://www.pagasa.dost.gov.ph",
+            text: "PAGASA–DOST",
+          },
+          {
+            label: "Regional alerts",
+            href: "https://www.jma.go.jp/en/typh/",
+            text: "JMA RSMC Tokyo",
+          },
+        ].map(({ label, href, text }) => (
+          <div key={label} className="flex items-center justify-between">
+            <span className="text-[9px] text-gray-400">{label}</span>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[9px] text-blue-500 hover:underline"
+            >
+              {text}
+            </a>
+          </div>
+        ))}
         <p className="text-[9px] text-gray-300 mt-1">
           Updates every 30 min · PAR monitor
         </p>
@@ -354,16 +327,32 @@ function NoStormContent() {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────
-const TyphoonLayer = ({
+// ── TyphoonLayer — ONLY map primitives (lives inside MapContainer) ────────
+// All DOM UI (button + panel) has been moved to TyphoonPanel below.
+const TyphoonLayer = ({ visible }) => {
+  const { data } = useOfflineCache("typhoon", fetchTyphoon, 30 * 60 * 1000);
+
+  if (!visible) return null;
+
+  const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : (data?.storms ?? []);
+
+  return (
+    <>
+      {storms.map((storm) => (
+        <StormMapLayer key={storm.id} storm={storm} />
+      ))}
+    </>
+  );
+};
+
+// ── TyphoonPanel — ONLY DOM UI (lives outside MapContainer) ──────────────
+// Drop this wherever the flood/landslide panels live in HazardMapPage.
+export const TyphoonPanel = ({
   visible,
   isOpen,
   onToggle,
-  topPosition = "top-[210px]",
   topStyle = null,
-  // When true, the button is omitted — the parent renders it instead.
-  // Use this to place the button in a shared stack without gaps.
-  hideButton = false,
+  topPosition = "top-[210px]",
 }) => {
   const { data, loading, isOffline, cachedAt } = useOfflineCache(
     "typhoon",
@@ -373,7 +362,6 @@ const TyphoonLayer = ({
 
   if (!visible) return null;
 
-  // Dev mode overrides real API data with fake storm
   const realStorms = data?.storms ?? [];
   const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : realStorms;
   const hasActiveStorm = IS_DEV_MODE ? true : (data?.hasActiveStorm ?? false);
@@ -393,12 +381,6 @@ const TyphoonLayer = ({
       : "bg-white border-gray-300",
   };
 
-  const iconColors = {
-    red: "text-red-500",
-    orange: "text-amber-500",
-    green: hasActiveStorm ? "text-green-600" : "text-gray-400",
-  };
-
   const timeAgo = (ts) => {
     if (!ts) return "";
     const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
@@ -408,46 +390,35 @@ const TyphoonLayer = ({
 
   return (
     <>
-      {/* ── Storm map layers ── */}
-      {storms.map((storm) => (
-        <StormMapLayer key={storm.id} storm={storm} />
-      ))}
-
-      {/* ── Icon button — hidden when parent manages the button position ── */}
-      {!hideButton && (
-        <button
-          onClick={onToggle}
-          title="Typhoon Tracker"
-          style={topStyle ?? undefined}
-          className={`absolute ${topStyle ? "" : topPosition} left-[10px] z-[1000]
-                      w-[30px] h-[30px] border flex items-center justify-center
-                      shadow-sm hover:brightness-95 transition-all
-                      ${
-                        isOpen
-                          ? `${btnColors[hasActiveStorm ? highestAlert : "green"]} ring-1 ring-offset-1`
-                          : `${hasActiveStorm ? btnColors[highestAlert] : "bg-white border-gray-300"}`
-                      }`}
-        >
-          {IS_DEV_MODE && (
-            <span
-              className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 border border-white"
-              title="Dev mode — fake storm injected"
-            />
-          )}
+      {/* Button */}
+      <button
+        onClick={onToggle}
+        title="Typhoon Tracker"
+        style={topStyle ?? undefined}
+        className={`absolute ${topStyle ? "" : topPosition} left-[10px] z-[1000]
+                    w-[30px] h-[30px] border flex items-center justify-center
+                    shadow-sm hover:brightness-95 transition-all
+                    ${
+                      isOpen
+                        ? `${btnColors[hasActiveStorm ? highestAlert : "green"]} ring-1 ring-offset-1`
+                        : `${hasActiveStorm ? btnColors[highestAlert] : "bg-white border-gray-300"}`
+                    }`}
+      >
+        {IS_DEV_MODE && (
           <span
-            className={`text-sm ${
-              isOpen || hasActiveStorm
-                ? iconColors[highestAlert]
-                : "text-gray-400"
-            }`}
-            style={{ fontSize: 15, lineHeight: 1 }}
-          >
-            🌀
-          </span>
-        </button>
-      )}
+            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 border border-white"
+            title="Dev mode — fake storm injected"
+          />
+        )}
+        <span
+          className={`text-sm ${isOpen || hasActiveStorm ? "text-amber-500" : "text-gray-400"}`}
+          style={{ fontSize: 15, lineHeight: 1 }}
+        >
+          🌀
+        </span>
+      </button>
 
-      {/* ── Info panel ── */}
+      {/* Panel */}
       {isOpen && (
         <div
           className="absolute top-[90px] left-[50px] z-[1050]
@@ -504,7 +475,7 @@ const TyphoonLayer = ({
             </div>
           )}
 
-          {/* No active storm — PAGASA info */}
+          {/* No storm */}
           {!loading && !hasActiveStorm && <NoStormContent />}
 
           {/* Active storms */}
@@ -539,8 +510,7 @@ const TyphoonLayer = ({
                     <div className="px-3 py-2 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                          <Wind size={10} />
-                          Max winds
+                          <Wind size={10} /> Max winds
                         </div>
                         <span className="text-[10px] font-semibold text-gray-700">
                           {storm.windKph} km/h
@@ -557,11 +527,11 @@ const TyphoonLayer = ({
                           </span>
                           <span
                             className={`text-[8px] px-1 py-0.5 rounded font-bold
-                            ${
-                              storm.windRadiusSource === "gdacs"
-                                ? "bg-green-50 text-green-600"
-                                : "bg-gray-100 text-gray-400"
-                            }`}
+                                          ${
+                                            storm.windRadiusSource === "gdacs"
+                                              ? "bg-green-50 text-green-600"
+                                              : "bg-gray-100 text-gray-400"
+                                          }`}
                           >
                             {storm.windRadiusSource === "gdacs"
                               ? "GDACS"
@@ -581,35 +551,34 @@ const TyphoonLayer = ({
                   </div>
                 );
               })}
-
-              {/* Sources */}
               <div className="border-t border-gray-100 pt-2 flex flex-col gap-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-400">
-                    Storm tracking
-                  </span>
-                  <a
-                    href="https://www.gdacs.org"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[9px] text-blue-500 hover:underline"
+                {[
+                  {
+                    label: "Storm tracking",
+                    href: "https://www.gdacs.org",
+                    text: "GDACS",
+                  },
+                  {
+                    label: "PH classification",
+                    href: "https://www.pagasa.dost.gov.ph",
+                    text: "PAGASA–DOST",
+                  },
+                ].map(({ label, href, text }) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between"
                   >
-                    GDACS
-                  </a>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-400">
-                    PH classification
-                  </span>
-                  <a
-                    href="https://www.pagasa.dost.gov.ph"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[9px] text-blue-500 hover:underline"
-                  >
-                    PAGASA–DOST
-                  </a>
-                </div>
+                    <span className="text-[9px] text-gray-400">{label}</span>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] text-blue-500 hover:underline"
+                    >
+                      {text}
+                    </a>
+                  </div>
+                ))}
                 <p className="text-[9px] text-gray-300 mt-0.5">
                   Updated every 6 hours
                 </p>
@@ -622,7 +591,6 @@ const TyphoonLayer = ({
   );
 };
 
-// Needed at module level but defined outside component to avoid re-creation
 const fetchTyphoon = async () => {
   const res = await fetch("/api/hazard/typhoon");
   if (!res.ok) throw new Error("Failed to fetch typhoon data");

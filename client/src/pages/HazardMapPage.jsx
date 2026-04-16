@@ -15,7 +15,14 @@ import FloodHazardLayer from "../components/map/flood/FloodHazardLayer";
 import FloodForecastPanel from "../components/map/flood/FloodForecastPanel";
 
 // typhoon
-import TyphoonLayer from "../components/map/typhoon/TyphoonLayer";
+import TyphoonLayer, {
+  TyphoonPanel,
+} from "../components/map/typhoon/TyphoonLayer";
+
+import LandslideForecastPanel from "../components/map/landslide/LandslideForecastPanel";
+import LandslideLayer, {
+  LandslideHazardLayer,
+} from "../components/map/landslide/LandslideLayer";
 
 // ui
 import HazardLegend from "../components/map/ui/HazardLegend";
@@ -52,9 +59,9 @@ function FlyToUser({ trigger, userPos }) {
 }
 
 const INITIAL_LAYERS = {
-  flood: true,
+  flood: false,
   earthquake: false,
-  typhoon: true,
+  typhoon: false,
   fire: false,
   landslide: false,
   reports: false,
@@ -127,8 +134,9 @@ export default function HazardMapPage() {
     const stack = ["basemap", "recenter"];
     if (layers.flood) stack.push("forecast");
     if (layers.typhoon) stack.push("typhoon");
+    if (layers.landslide) stack.push("landslide");
     return stack;
-  }, [layers.flood, layers.typhoon]);
+  }, [layers.flood, layers.typhoon, layers.landslide]);
 
   // Returns inline style { top: "Npx" } for a given button key,
   // or { display: "none" } if the button is not in the current stack.
@@ -190,16 +198,17 @@ export default function HazardMapPage() {
 
         {/* ── Leaflet map — only map-layer components live here ── */}
         <BaseMap tileVariant={basemap} center={CITY_CENTER} zoom={CITY_ZOOM}>
-          <FloodHazardLayer visible={layers.flood} />
-          {/* TyphoonLayer renders only storm markers, circles, and tracks on the map.
-              The typhoon tracker button + panel are in the floating UI below. */}
-          <TyphoonLayer
-            visible={layers.typhoon}
-            isOpen={activePopup === "typhoon"}
-            onToggle={() => togglePopup("typhoon")}
-            hideButton
-          />
-          <FloodLayer visible={false} />
+          <FloodHazardLayer key="flood-haz" visible={layers.flood} />{" "}
+          {/* ← add key */}
+          <TyphoonLayer key="typhoon" visible={layers.typhoon} />{" "}
+          {/* ← add key */}
+          <LandslideHazardLayer
+            key="landslide-haz"
+            visible={layers.landslide}
+          />{" "}
+          {/* ← add key */}
+          <LandslideLayer key="landslide" visible={layers.landslide} />{" "}
+          {/* ← add key */}
           <UserLocationMarker onLocated={setUserPos} />
           <FlyToUser trigger={flyTrigger} userPos={userPos} />
           <MapStatusBar />
@@ -291,23 +300,23 @@ export default function HazardMapPage() {
                Sits here in the DOM so it stacks cleanly with 1–3.
                The map markers/circles are inside TyphoonLayer above. */}
         {layers.typhoon && (
-          <button
-            onClick={() => togglePopup("typhoon")}
-            title="Typhoon Tracker"
-            style={{ ...btnStyle("typhoon"), left: 10, position: "absolute" }}
-            className={`z-[1000] w-[30px] h-[30px] border flex items-center justify-center
-                        shadow-sm hover:brightness-95 transition-all
-                        ${activePopup === "typhoon" ? "bg-purple-50 border-purple-400 ring-1 ring-offset-1 ring-purple-300" : "bg-white border-gray-300"}`}
-          >
-            <span
-              style={{ fontSize: 15, lineHeight: 1 }}
-              className={
-                activePopup === "typhoon" ? "text-purple-500" : "text-gray-400"
-              }
-            >
-              🌀
-            </span>
-          </button>
+          <TyphoonPanel
+            visible={layers.typhoon}
+            isOpen={activePopup === "typhoon"}
+            onToggle={() => togglePopup("typhoon")}
+            topStyle={btnStyle("typhoon")}
+          />
+        )}
+
+        {/* Landslide forecast — only when landslide layer is on */}
+        {layers.landslide && (
+          <LandslideForecastPanel
+            visible={layers.landslide} // Make sure this is being passed
+            isOpen={activePopup === "landslide"}
+            onToggle={() => togglePopup("landslide")}
+            topStyle={btnStyle("landslide")}
+            onOfflineChange={handleOfflineChange}
+          />
         )}
 
         {/* Basemap picker popup */}

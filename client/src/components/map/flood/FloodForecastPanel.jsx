@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { Waves, Droplets, X, WifiOff, FlaskConical } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
@@ -164,9 +164,11 @@ const FloodForecastPanel = ({
   const loading = IS_DEV_MODE ? false : liveLoading;
 
   // Notify parent of offline state changes
-  if (typeof onOfflineChange === "function") {
-    onOfflineChange({ isOffline, cachedAt });
-  }
+  useEffect(() => {
+    if (typeof onOfflineChange === "function") {
+      onOfflineChange({ isOffline, cachedAt });
+    }
+  }, [isOffline, cachedAt, onOfflineChange]);
 
   if (!visible) return null;
 

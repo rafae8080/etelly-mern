@@ -420,4 +420,157 @@ function estimateWindRadius(windKph) {
   if (windKph >= 62) return 55;
   return 40;
 }
+
+// ── Antipolo landslide susceptibility zones ───────────────────────────────
+// Based on MGB (Mines and Geosciences Bureau) high/moderate susceptibility
+// areas in Antipolo City, Rizal. Risk: 3 = High, 2 = Moderate, 1 = Low.
+const LANDSLIDE_ZONES = [
+  { lat: 14.622, lng: 121.198, risk: 3, name: "Brgy. Dalig (upper slope)" },
+  { lat: 14.631, lng: 121.205, risk: 3, name: "Brgy. Calawis, Antipolo" },
+  { lat: 14.615, lng: 121.187, risk: 3, name: "Brgy. San Jose (hillside)" },
+  { lat: 14.607, lng: 121.182, risk: 3, name: "Brgy. Mambugan (ridge)" },
+  { lat: 14.598, lng: 121.175, risk: 2, name: "Brgy. Inarawan (slope)" },
+  { lat: 14.591, lng: 121.168, risk: 2, name: "Brgy. Dela Paz (hillside)" },
+  { lat: 14.583, lng: 121.172, risk: 3, name: "Hinulugang Taktak escarpment" },
+  { lat: 14.576, lng: 121.162, risk: 2, name: "Brgy. San Roque (mid-slope)" },
+  { lat: 14.568, lng: 121.155, risk: 2, name: "Brgy. Cupang (elevated)" },
+  { lat: 14.639, lng: 121.212, risk: 3, name: "Brgy. Binubusan ridge" },
+];
+
+// Rainfall thresholds (mm/day) for landslide trigger — based on
+// PHIVOLCS/MGB rainfall-induced landslide warning thresholds for Rizal
+const LANDSLIDE_RAINFALL_THRESHOLDS = {
+  low: { day1: 50, day3: 100 }, // Low susceptibility zones
+  moderate: { day1: 35, day3: 70 }, // Moderate susceptibility zones
+  high: { day1: 20, day3: 50 }, // High susceptibility zones (most sensitive)
+};
+
+// Soil moisture saturation threshold (m³/m³) — above this, slope stability drops sharply
+const SOIL_SATURATION_THRESHOLD = 0.35;
+
+// ── Rule-based landslide risk classifier ─────────────────────────────────
+function classifyLandslideRisk(
+  rainfall24h,
+  rainfall72h,
+  soilMoisture,
+  slopeRisk,
+) {
+  const threshold =
+    slopeRisk === 3
+      ? LANDSLIDE_RAINFALL_THRESHOLDS.high
+      : slopeRisk === 2
+        ? LANDSLIDE_RAINFALL_THRESHOLDS.moderate
+        : LANDSLIDE_RAINFALL_THRESHOLDS.low;
+
+  const soilSaturated = soilMoisture >= SOIL_SATURATION_THRESHOLD;
+  const rainfallTrigger =
+    rainfall24h >= threshold.day1 || rainfall72h >= threshold.day3;
+
+  // Critical: both rainfall threshold AND soil saturation exceeded on high-risk slope
+  if (slopeRisk === 3 && rainfallTrigger && soilSaturated) {
+    return { label: "Critical", level: 3, color: "#dc2626" };
+  }
+  // Warning: rainfall threshold exceeded OR soil saturated on moderate/high slope
+  if (slopeRisk >= 2 && (rainfallTrigger || soilSaturated)) {
+    return { label: "Warning", level: 2, color: "#f97316" };
+  }
+  // Watch: some rainfall on any susceptible slope
+  if (slopeRisk >= 1 && rainfall24h >= threshold.day1 * 0.5) {
+    return { label: "Watch", level: 1, color: "#f59e0b" };
+  }
+  return { label: "Low", level: 0, color: "#22c55e" };
+}
+
+// ── GET /api/hazard/landslide-zones ──────────────────────────────────────
+router.get("/landslide-zones", async (req, res) => {
+  try {
+    res.json({ zones: LANDSLIDE_ZONES });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/hazard/landslide ─────────────────────────────────────────────
+// Real-time landslide risk using Open-Meteo rainfall + soil moisture
+// Combined with static MGB susceptibility zones — rule-based, no ML needed
+router.get("/landslide", async (req, res) => {
+  try {
+    const { lat = 14.5882, lon = 121.1763 } = req.query;
+
+    // Fetch rainfall (past 3 days + 7-day forecast) and soil moisture
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}&longitude=${lon}` +
+      `&daily=precipitation_sum,precipitation_probability_max` +
+      `&hourly=soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
+      `&past_days=3` +
+      `&forecast_days=7` +
+      `&timezone=Asia%2FManila`;
+
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("Open-Meteo fetch failed");
+    const data = await r.json();
+
+    const dailyDates = data.daily?.time ?? [];
+    const precipSum = data.daily?.precipitation_sum ?? [];
+    const precipProb = data.daily?.precipitation_probability_max ?? [];
+    const soilTop = data.hourly?.soil_moisture_0_to_7cm ?? [];
+    const soilDeep = data.hourly?.soil_moisture_7_to_28cm ?? [];
+
+    // Latest soil moisture = most recent hourly value available
+    const latestSoilTop = soilTop.filter(Boolean).at(-1) ?? 0;
+    const latestSoilDeep = soilDeep.filter(Boolean).at(-1) ?? 0;
+    const avgSoilMoisture = (latestSoilTop + latestSoilDeep) / 2;
+
+    // past_days=3 means index 0,1,2 are past; index 3 = today
+    const todayIdx = 3;
+    const rainfall24h = precipSum[todayIdx] ?? 0;
+    const rainfall72h = (
+      precipSum.slice(todayIdx - 2, todayIdx + 1) ?? []
+    ).reduce((a, b) => a + (b ?? 0), 0);
+
+    // 7-day forecast slice (after today)
+    const forecastDates = dailyDates.slice(todayIdx);
+    const forecastPrecip = precipSum.slice(todayIdx);
+    const forecastProb = precipProb.slice(todayIdx);
+
+    // Assess risk for each zone
+    const zones = LANDSLIDE_ZONES.map((zone) => {
+      const risk = classifyLandslideRisk(
+        rainfall24h,
+        rainfall72h,
+        avgSoilMoisture,
+        zone.risk,
+      );
+      return { ...zone, riskAssessment: risk };
+    });
+
+    // Overall alert = highest risk level across all zones
+    const maxLevel = Math.max(...zones.map((z) => z.riskAssessment.level));
+    const overallRisk = zones.find((z) => z.riskAssessment.level === maxLevel)
+      ?.riskAssessment ?? { label: "Low", level: 0, color: "#22c55e" };
+
+    res.json({
+      overallRisk,
+      zones,
+      current: {
+        rainfall24h,
+        rainfall72h,
+        soilMoisture: parseFloat(avgSoilMoisture.toFixed(4)),
+        soilSaturated: avgSoilMoisture >= SOIL_SATURATION_THRESHOLD,
+      },
+      forecast: {
+        dates: forecastDates,
+        precipitation_sum: forecastPrecip,
+        precipitation_probability_max: forecastProb,
+      },
+      thresholds: LANDSLIDE_RAINFALL_THRESHOLDS,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("❌ Landslide API error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
