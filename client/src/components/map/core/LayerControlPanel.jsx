@@ -31,14 +31,7 @@ const LAYERS = [
     ring: "ring-red-400",
     disabled: true,
   },
-  {
-    key: "fire",
-    label: "Fire Hotspots",
-    Icon: Flame,
-    activeColor: "bg-orange-500",
-    ring: "ring-orange-400",
-    disabled: true,
-  },
+
   {
     key: "reports",
     label: "Live Reports",

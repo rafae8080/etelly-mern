@@ -50,11 +50,26 @@ function MapReadyHandler({ onReady }) {
 function FlyToUser({ trigger, userPos }) {
   const map = useMap();
   const prevTrigger = useRef(0);
+
   useEffect(() => {
     if (trigger === prevTrigger.current) return;
     prevTrigger.current = trigger;
-    if (userPos) map.flyTo(userPos, 17, { duration: 1.2 });
+
+    if (userPos) {
+      map.flyTo(userPos, 17, { duration: 1.2 });
+
+      // Force Leaflet to refresh tiles/vectors after the flight begins
+      // and again once it finishes to ensure nothing "disappears"
+      map.invalidateSize();
+
+      const timer = setTimeout(() => {
+        map.invalidateSize();
+      }, 1300); // slightly longer than the 1.2s duration
+
+      return () => clearTimeout(timer);
+    }
   }, [trigger, userPos, map]);
+
   return null;
 }
 
@@ -66,6 +81,29 @@ const INITIAL_LAYERS = {
   landslide: false,
   reports: false,
 };
+
+function buildAttribution(layers) {
+  // Use a Set to store unique sources automatically
+  const sources = new Set();
+
+  if (layers.flood) {
+    sources.add("Open-Meteo");
+    sources.add("GloFAS");
+  }
+
+  if (layers.typhoon) {
+    sources.add("PAGASA");
+    sources.add("GDACS");
+  }
+
+  if (layers.landslide) {
+    sources.add("Open-Meteo");
+    sources.add("MGB");
+  }
+
+  // Convert Set back to array and join with dots
+  return Array.from(sources).join(" · ");
+}
 
 export default function HazardMapPage() {
   const [layers, setLayers] = useState(INITIAL_LAYERS);
@@ -128,8 +166,6 @@ export default function HazardMapPage() {
   };
 
   // ── Dynamic button stack ──────────────────────────────────────────────────
-  // All left-side buttons are declared here in order.
-  // Only buttons for active layers are added — no gaps, no hardcoded tops.
   const buttonStack = useMemo(() => {
     const stack = ["basemap", "recenter"];
     if (layers.flood) stack.push("forecast");
@@ -138,8 +174,6 @@ export default function HazardMapPage() {
     return stack;
   }, [layers.flood, layers.typhoon, layers.landslide]);
 
-  // Returns inline style { top: "Npx" } for a given button key,
-  // or { display: "none" } if the button is not in the current stack.
   const btnStyle = useCallback(
     (key) => {
       const idx = buttonStack.indexOf(key);
@@ -148,6 +182,9 @@ export default function HazardMapPage() {
     },
     [buttonStack],
   );
+
+  // Dynamic attribution string based on active layers
+  const attribution = useMemo(() => buildAttribution(layers), [layers]);
 
   return (
     <div className="flex flex-col h-full">
@@ -196,26 +233,22 @@ export default function HazardMapPage() {
           </div>
         )}
 
-        {/* ── Leaflet map — only map-layer components live here ── */}
+        {/* ── Leaflet map ── */}
         <BaseMap tileVariant={basemap} center={CITY_CENTER} zoom={CITY_ZOOM}>
-          <FloodHazardLayer key="flood-haz" visible={layers.flood} />{" "}
-          {/* ← add key */}
-          <TyphoonLayer key="typhoon" visible={layers.typhoon} />{" "}
-          {/* ← add key */}
+          <FloodHazardLayer key="flood-haz" visible={layers.flood} />
+          <TyphoonLayer key="typhoon" visible={layers.typhoon} />
           <LandslideHazardLayer
             key="landslide-haz"
             visible={layers.landslide}
-          />{" "}
-          {/* ← add key */}
-          <LandslideLayer key="landslide" visible={layers.landslide} />{" "}
-          {/* ← add key */}
+          />
+          <LandslideLayer key="landslide" visible={layers.landslide} />
           <UserLocationMarker onLocated={setUserPos} />
           <FlyToUser trigger={flyTrigger} userPos={userPos} />
           <MapStatusBar />
           <MapReadyHandler onReady={() => setLoading(false)} />
         </BaseMap>
 
-        {/* ── Floating UI — everything outside the Leaflet canvas ── */}
+        {/* ── Floating UI ── */}
 
         {/* Offline banner */}
         {offlineInfo.isOffline && (
@@ -225,7 +258,7 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* City badge — top right */}
+        {/* City badge — top right — attribution updates with active layers */}
         <div
           className="absolute top-4 right-4 z-[1000]
                         bg-white/90 backdrop-blur border border-gray-200
@@ -238,18 +271,12 @@ export default function HazardMapPage() {
               {CITY_NAME}
             </p>
             <p className="text-gray-400 text-[10px] mt-0.5 leading-none">
-              PAGASA · NOAH · USGS
+              {attribution}
             </p>
           </div>
         </div>
 
-        {/* ════════════════════════════════════════════════════════
-            LEFT BUTTON STACK
-            All 4 buttons declared here. Each uses btnStyle(key) for
-            its top position — computed from its index in buttonStack.
-            When a layer is off its button is simply absent from the stack,
-            so the remaining buttons close up with zero gap.
-        ════════════════════════════════════════════════════════ */}
+        {/* ── LEFT BUTTON STACK ── */}
 
         {/* 1. Basemap picker — always visible */}
         <button
@@ -285,7 +312,7 @@ export default function HazardMapPage() {
           />
         </button>
 
-        {/* 3. Flood forecast — only when flood layer is on */}
+        {/* 3. Flood forecast */}
         {layers.flood && (
           <FloodForecastPanel
             visible={layers.flood}
@@ -296,22 +323,21 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* 4. Typhoon tracker button — only when typhoon layer is on.
-               Sits here in the DOM so it stacks cleanly with 1–3.
-               The map markers/circles are inside TyphoonLayer above. */}
+        {/* 4. Typhoon tracker */}
         {layers.typhoon && (
           <TyphoonPanel
             visible={layers.typhoon}
             isOpen={activePopup === "typhoon"}
             onToggle={() => togglePopup("typhoon")}
             topStyle={btnStyle("typhoon")}
+            onOfflineChange={handleOfflineChange}
           />
         )}
 
-        {/* Landslide forecast — only when landslide layer is on */}
+        {/* 5. Landslide forecast */}
         {layers.landslide && (
           <LandslideForecastPanel
-            visible={layers.landslide} // Make sure this is being passed
+            visible={layers.landslide}
             isOpen={activePopup === "landslide"}
             onToggle={() => togglePopup("landslide")}
             topStyle={btnStyle("landslide")}

@@ -302,78 +302,134 @@ router.get("/flood-combined", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ── Helpers: parse GDACS RSS XML without external deps ───────────────────
+// The GDACS GeoJSON API (geteventlist + geteventdata) consistently returns
+// maxwind=0/null even for Cat-5 storms — a known upstream data quality issue.
+// The RSS feed (/xml/rss_tc_7d.xml) is updated every 6 minutes and reliably
+// carries wind speed in gdacs:severity[value] (knots) + gdacs:severity[unit].
+
+function xmlText(xml, tag) {
+  // Extract inner text of first matching tag (handles namespaced tags)
+  const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, "i");
+  const m = xml.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function xmlAttr(xml, tag, attr) {
+  // Extract attribute value from first matching opening tag
+  const re = new RegExp(`<${tag}[^>]+${attr}="([^"]*)"`, "i");
+  const m = xml.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function parseRssItems(xml) {
+  // Split into <item>...</item> blocks
+  const items = [];
+  const re = /<item>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = re.exec(xml)) !== null) items.push(m[1]);
+  return items;
+}
+
 // ── GET /api/hazard/typhoon ───────────────────────────────────────────────
-// GDACS Tropical Cyclone API — Western Pacific active storms
+// Primary source: GDACS RSS feed (reliable wind speed via gdacs:severity)
+// Updated every 6 minutes. Falls back to GeoJSON API if RSS is unavailable.
 router.get("/typhoon", async (req, res) => {
   try {
-    // GDACS event list — TC = Tropical Cyclone, filtered to Western Pacific
-    const url =
-      "https://www.gdacs.org/gdacsapi/api/events/geteventlist/TC" +
-      "?limit=5&alertlevel=Green,Orange,Red";
+    // PAR bounding box — Western Pacific / near Philippines
+    const PH_PAR = { minLat: 3, maxLat: 30, minLon: 110, maxLon: 145 };
 
-    const r = await fetch(url, {
-      headers: { Accept: "application/json" },
+    // ── Step 1: Fetch GDACS RSS TC feed (most reliable wind data source) ──
+    const rssUrl = "https://www.gdacs.org/xml/rss_tc_7d.xml";
+    const rssRes = await fetch(rssUrl, {
+      headers: { Accept: "application/xml, text/xml" },
     });
+    if (!rssRes.ok) throw new Error(`GDACS RSS responded ${rssRes.status}`);
+    const rssXml = await rssRes.text();
 
-    if (!r.ok) throw new Error(`GDACS responded ${r.status}`);
-    const data = await r.json();
+    const items = parseRssItems(rssXml);
 
-    const events = data?.features ?? [];
+    const storms = items
+      .map((item) => {
+        // Only TC events
+        const eventType = xmlText(item, "gdacs:eventtype");
+        if (eventType !== "TC") return null;
 
-    // Filter to Western Pacific / near Philippines only
-    // PAR bounding box: roughly 115°E–135°E, 5°N–25°N
-    const PH_PAR = {
-      minLat: 3,
-      maxLat: 30,
-      minLon: 110,
-      maxLon: 145,
-    };
+        // Position from georss:point ("lat lon") or geo:lat / geo:long
+        let lat = 0,
+          lon = 0;
+        const georssPoint = xmlText(item, "georss:point");
+        if (georssPoint) {
+          const parts = georssPoint.split(/\s+/);
+          lat = parseFloat(parts[0]);
+          lon = parseFloat(parts[1]);
+        } else {
+          lat = parseFloat(xmlText(item, "geo:lat") ?? "0");
+          lon = parseFloat(xmlText(item, "geo:long") ?? "0");
+        }
 
-    const storms = events
-      .filter((f) => {
-        const [lon, lat] = f.geometry?.coordinates ?? [0, 0];
-        return (
-          lat >= PH_PAR.minLat &&
-          lat <= PH_PAR.maxLat &&
-          lon >= PH_PAR.minLon &&
-          lon <= PH_PAR.maxLon
-        );
-      })
-      .map((f) => {
-        const props = f.properties ?? {};
-        const [lon, lat] = f.geometry?.coordinates ?? [0, 0];
+        // Filter to Western Pacific / PAR region
+        if (
+          lat < PH_PAR.minLat ||
+          lat > PH_PAR.maxLat ||
+          lon < PH_PAR.minLon ||
+          lon > PH_PAR.maxLon
+        )
+          return null;
 
-        // GDACS wind speed is in km/h
-        const windKph = props.maxwind ?? 0;
+        // Wind speed: gdacs:severity value attribute is in knots
+        // e.g. <gdacs:severity value="100" unit="kn">Wind speed: 185 km/h</gdacs:severity>
+        const severityValueRaw = xmlAttr(item, "gdacs:severity", "value");
+        const severityUnit = xmlAttr(item, "gdacs:severity", "unit") ?? "kn";
+        let windKph = 0;
+        if (severityValueRaw) {
+          const severityNum = parseFloat(severityValueRaw);
+          if (!isNaN(severityNum) && severityNum > 0) {
+            // Convert knots → km/h if unit is knots; already km/h if unit is "km/h"
+            windKph =
+              severityUnit === "km/h"
+                ? severityNum
+                : Math.round(severityNum * 1.852);
+          }
+        }
+        // Fallback: try to parse km/h from the severity text itself
+        // e.g. "Wind speed: 185 km/h"
+        if (windKph === 0) {
+          const severityText = xmlText(item, "gdacs:severity") ?? "";
+          const kmhMatch = severityText.match(/([\d.]+)\s*km\/h/i);
+          if (kmhMatch) windKph = Math.round(parseFloat(kmhMatch[1]));
+        }
+
         const windKnots = Math.round(windKph / 1.852);
 
+        // Wind radius — gdacs:severity doesn't carry this; use estimate
+        const windRadiusKm = estimateWindRadius(windKph);
+
+        const alertLevel = (
+          xmlText(item, "gdacs:alertlevel") ?? "green"
+        ).toLowerCase();
+        const eventId = xmlText(item, "gdacs:eventid") ?? "unknown";
+        const eventName = xmlText(item, "gdacs:eventname") ?? "Unnamed Storm";
+        const toDate = xmlText(item, "gdacs:todate") ?? null;
+
         return {
-          id: props.eventid ?? "unknown",
-          name: props.eventname ?? "Unnamed Storm",
+          id: eventId,
+          name: eventName,
           lat,
           lon,
-          alertLevel: props.alertlevel?.toLowerCase() ?? "green",
+          alertLevel,
           windKph: Math.round(windKph),
           windKnots,
           category: classifyTyphoon(windKph),
-          movement: props.movementspeed ?? null,
-          direction: props.movementdir ?? null,
-          updatedAt: props.todate ?? null,
-          // Wind radius: use GDACS value when available (km), fall back to
-          // statistical estimate only when GDACS returns null/0.
-          // GDACS field is props.maxwindradius (km) — not always populated.
-          windRadiusKm:
-            props.maxwindradius && props.maxwindradius > 0
-              ? Math.round(props.maxwindradius)
-              : estimateWindRadius(windKph),
-          windRadiusSource:
-            props.maxwindradius && props.maxwindradius > 0
-              ? "gdacs"
-              : "estimated",
-          // Forecast track — GDACS provides this in episodelist
-          forecastTrack: props.forecasttrack ?? [],
+          movement: null, // RSS doesn't carry movement speed
+          direction: null,
+          updatedAt: toDate,
+          windRadiusKm,
+          windRadiusSource: "estimated",
+          forecastTrack: [],
         };
-      });
+      })
+      .filter(Boolean);
 
     // Always respond — empty array means no active storms near PH
     res.json({
@@ -383,7 +439,7 @@ router.get("/typhoon", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Typhoon API error:", err.message);
-    // Return empty rather than error — offline cache will handle it
+    // Return empty rather than hard error — frontend offline cache will handle it
     res.json({
       storms: [],
       hasActiveStorm: false,

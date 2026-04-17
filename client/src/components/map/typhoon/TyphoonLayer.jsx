@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { Polyline, Popup, Circle, Marker } from "react-leaflet";
-import { Wind, X, Info, FlaskConical } from "lucide-react";
+import { Wind, X, Info, FlaskConical, WifiOff } from "lucide-react";
 import L from "leaflet";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
@@ -328,7 +329,6 @@ function NoStormContent() {
 }
 
 // ── TyphoonLayer — ONLY map primitives (lives inside MapContainer) ────────
-// All DOM UI (button + panel) has been moved to TyphoonPanel below.
 const TyphoonLayer = ({ visible }) => {
   const { data } = useOfflineCache("typhoon", fetchTyphoon, 30 * 60 * 1000);
 
@@ -345,20 +345,28 @@ const TyphoonLayer = ({ visible }) => {
   );
 };
 
-// ── TyphoonPanel — ONLY DOM UI (lives outside MapContainer) ──────────────
-// Drop this wherever the flood/landslide panels live in HazardMapPage.
+// ── TyphoonPanel — DOM UI with offline cache indicator ───────────────────
 export const TyphoonPanel = ({
   visible,
   isOpen,
   onToggle,
   topStyle = null,
   topPosition = "top-[210px]",
+  onOfflineChange,
 }) => {
   const { data, loading, isOffline, cachedAt } = useOfflineCache(
     "typhoon",
     fetchTyphoon,
     30 * 60 * 1000,
   );
+
+  // Notify parent of offline state — same pattern as LandslideForecastPanel
+  useEffect(() => {
+    if (IS_DEV_MODE) return;
+    if (typeof onOfflineChange === "function") {
+      onOfflineChange({ isOffline, cachedAt });
+    }
+  }, [isOffline, cachedAt, onOfflineChange]);
 
   if (!visible) return null;
 
@@ -384,6 +392,7 @@ export const TyphoonPanel = ({
   const timeAgo = (ts) => {
     if (!ts) return "";
     const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+    if (mins < 1) return "just now";
     if (mins < 60) return `${mins}m ago`;
     return `${Math.floor(mins / 60)}h ago`;
   };
@@ -446,10 +455,18 @@ export const TyphoonPanel = ({
                       DEV
                     </span>
                   )}
+                  {/* ── Offline indicator — same as LandslideForecastPanel ── */}
+                  {!IS_DEV_MODE && isOffline && (
+                    <WifiOff
+                      size={10}
+                      className="text-amber-500"
+                      title={`Cached ${timeAgo(cachedAt)}`}
+                    />
+                  )}
                 </div>
                 <p className="text-[10px] text-gray-400">
                   Western Pacific · PAR Monitor
-                  {isOffline && cachedAt && (
+                  {!IS_DEV_MODE && isOffline && cachedAt && (
                     <span className="text-amber-500 ml-1">
                       · cached {timeAgo(cachedAt)}
                     </span>

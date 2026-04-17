@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Mountain, Droplets, X, WifiOff } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
@@ -158,15 +159,11 @@ const fetchLandslide = async () => {
   try {
     const res = await fetch("/api/hazard/landslide", {
       signal: controller.signal,
-      headers: {
-        Accept: "application/json",
-      },
+      headers: { Accept: "application/json" },
     });
     clearTimeout(timeoutId);
-
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    const data = await res.json();
-    return data;
+    return await res.json();
   } catch (error) {
     clearTimeout(timeoutId);
     console.warn("Landslide API fetch failed:", error.message);
@@ -174,7 +171,7 @@ const fetchLandslide = async () => {
   }
 };
 
-// Wrapper component to handle conditional hook calling
+// ── FIX: hooks are ALWAYS called — no conditional hook calls ──────────────
 const LandslideForecastPanelContent = ({
   visible,
   isOpen,
@@ -182,30 +179,28 @@ const LandslideForecastPanelContent = ({
   topStyle,
   onOfflineChange,
 }) => {
-  // Only call useOfflineCache when NOT in dev mode
-  const cacheResult = !IS_DEV_MODE
-    ? useOfflineCache("landslide-forecast", fetchLandslide, 10 * 60 * 1000)
-    : {
-        data: null,
-        loading: false,
-        isOffline: false,
-        cachedAt: null,
-        error: null,
-      };
+  // Always call the hook unconditionally — satisfies Rules of Hooks.
+  // In dev mode we still call it but ignore its return value.
+  const cacheResult = useOfflineCache(
+    "landslide-forecast",
+    fetchLandslide,
+    10 * 60 * 1000,
+  );
 
-  let { data, loading, isOffline, cachedAt, error } = cacheResult;
+  // Pick data source: dev fake data OR real cache result
+  const data = IS_DEV_MODE ? DEV_FAKE_DATA : cacheResult.data;
+  const loading = IS_DEV_MODE ? false : cacheResult.loading;
+  const isOffline = IS_DEV_MODE ? false : cacheResult.isOffline;
+  const cachedAt = IS_DEV_MODE ? null : cacheResult.cachedAt;
+  const error = IS_DEV_MODE ? null : cacheResult.error;
 
-  // In dev mode, override with fake data
-  if (IS_DEV_MODE) {
-    data = DEV_FAKE_DATA;
-    loading = false;
-    isOffline = false;
-    error = null;
-  }
-
-  if (typeof onOfflineChange === "function" && !IS_DEV_MODE) {
-    onOfflineChange({ isOffline, cachedAt });
-  }
+  // FIX: notify parent via useEffect, not inline during render
+  useEffect(() => {
+    if (IS_DEV_MODE) return;
+    if (typeof onOfflineChange === "function") {
+      onOfflineChange({ isOffline, cachedAt });
+    }
+  }, [isOffline, cachedAt, onOfflineChange]);
 
   const alertKey = data?.overallRisk?.label ?? "Low";
   const alert = ALERT_CONFIG[alertKey] ?? DEFAULT_ALERT;
@@ -393,6 +388,21 @@ const LandslideForecastPanelContent = ({
                   values={forecast?.precipitation_sum ?? []}
                   max={Math.max(...(forecast?.precipitation_sum ?? [1]), 1)}
                 />
+                {/* Sparkbar color legend */}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm bg-blue-400" />
+                    <span className="text-[8px] text-gray-400">Low</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm bg-amber-400" />
+                    <span className="text-[8px] text-gray-400">Moderate</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm bg-red-400" />
+                    <span className="text-[8px] text-gray-400">Heavy</span>
+                  </div>
+                </div>
                 <div className="flex justify-between mt-0.5">
                   {(forecast?.dates ?? []).slice(0, 7).map((d, i) => (
                     <span key={i} className="text-[8px] text-gray-300">
@@ -424,7 +434,7 @@ const LandslideForecastPanelContent = ({
   );
 };
 
-// Main component that just passes props through
+// Main component — guard on visible only; hooks inside always run
 const LandslideForecastPanel = (props) => {
   if (!props.visible) return null;
   return <LandslideForecastPanelContent {...props} />;

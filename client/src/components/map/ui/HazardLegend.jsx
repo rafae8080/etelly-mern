@@ -1,163 +1,137 @@
 import { useState, useEffect } from "react";
+import { Droplets, Wind, Mountain } from "lucide-react";
 
-const FLOOD_LEVELS = [
-  {
-    color: "#d73027",
-    label: "High",
-    description: "Depth > 1.5m — danger zone",
-  },
-  {
-    color: "#fc8d59",
-    label: "Medium",
-    description: "Depth 0.5–1.5m — caution",
-  },
-  {
-    color: "#fee090",
-    label: "Low",
-    description: "Depth 0.1–0.5m — watch area",
-  },
-];
+// ── Legend definitions ────────────────────────────────────────────────────
 
-const TYPHOON_LEVELS = [
-  { color: "#7c3aed", label: "Super Typhoon", description: "Wind ≥ 220 km/h" },
-  { color: "#dc2626", label: "Typhoon (TY)", description: "Wind 118–220 km/h" },
-  {
-    color: "#f97316",
-    label: "Severe Tropical Storm",
-    description: "Wind 89–117 km/h",
-  },
-  { color: "#f59e0b", label: "Tropical Storm", description: "Wind 62–88 km/h" },
-  {
-    color: "#3b82f6",
-    label: "Tropical Depression",
-    description: "Wind 35–61 km/h",
-  },
-];
+const FLOOD_LEGEND = {
+  key: "flood",
+  label: "Flood",
+  Icon: Droplets,
+  iconColor: "text-blue-500",
+  rows: [
+    { color: "#dc2626", label: "High risk" },
+    { color: "#f97316", label: "Moderate risk" },
+    { color: "#3b82f6", label: "Low risk" },
+  ],
+};
 
-const FloodContent = () => (
-  <div>
-    <div className="flex flex-col gap-2">
-      {FLOOD_LEVELS.map(({ color, label, description }) => (
-        <div key={label} className="flex items-start gap-2.5">
-          <div
-            className="w-3.5 h-3.5 rounded-sm mt-0.5 flex-shrink-0 border border-black/10"
-            style={{ backgroundColor: color }}
-          />
-          <div>
-            <p className="text-xs font-semibold text-gray-700 leading-none">
-              {label}
-            </p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-    <p className="text-[9px] text-gray-300 mt-3 border-t border-gray-100 pt-2">
-      Source: Phil-LiDAR 1 / UP DREAM · LiPAD FMC
-    </p>
-  </div>
-);
+const TYPHOON_LEGEND = {
+  key: "typhoon",
+  label: "Typhoon",
+  Icon: Wind,
+  iconColor: "text-cyan-500",
+  rows: [
+    { color: "#7c3aed", label: "Super Typhoon (≥220 km/h)" },
+    { color: "#dc2626", label: "Typhoon (≥118 km/h)" },
+    { color: "#f97316", label: "Severe Tropical Storm" },
+    { color: "#f59e0b", label: "Tropical Storm" },
+    { color: "#3b82f6", label: "Tropical Depression" },
+  ],
+};
 
-const TyphoonContent = () => (
-  <div>
-    <div className="flex flex-col gap-2">
-      {TYPHOON_LEVELS.map(({ color, label, description }) => (
-        <div key={label} className="flex items-start gap-2.5">
-          <div
-            className="w-3.5 h-3.5 rounded-full mt-0.5 flex-shrink-0 border-2 border-white"
-            style={{
-              backgroundColor: color,
-              boxShadow: `0 0 0 1px ${color}`,
-            }}
-          />
-          <div>
-            <p className="text-xs font-semibold text-gray-700 leading-none">
-              {label}
-            </p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-    <p className="text-[9px] text-gray-300 mt-3 border-t border-gray-100 pt-2">
-      Source: GDACS · PAGASA classification
-    </p>
-  </div>
-);
+const LANDSLIDE_LEGEND = {
+  key: "landslide",
+  label: "Landslide",
+  Icon: Mountain,
+  iconColor: "text-amber-500",
+  rows: [
+    {
+      color: "#dc2626",
+      label: "Critical — heavy rain + saturated soil on high-risk slope",
+    },
+    {
+      color: "#f97316",
+      label: "Warning — rain threshold or soil saturation exceeded",
+    },
+    { color: "#f59e0b", label: "Watch — some rainfall on susceptible slope" },
+    { color: "#22c55e", label: "Low — below trigger threshold" },
+  ],
+};
 
-const HazardLegend = ({ activeLayers }) => {
-  const hasFlood = activeLayers?.flood;
-  const hasTyphoon = activeLayers?.typhoon;
-  const bothActive = hasFlood && hasTyphoon;
+const ALL_LEGENDS = [FLOOD_LEGEND, TYPHOON_LEGEND, LANDSLIDE_LEGEND];
 
-  // Default active tab: whichever layer is on, flood takes priority
-  const [activeTab, setActiveTab] = useState("flood");
+// ── HazardLegend ──────────────────────────────────────────────────────────
+export default function HazardLegend({ activeLayers }) {
+  const active = ALL_LEGENDS.filter((l) => activeLayers[l.key]);
+  const [selectedKey, setSelectedKey] = useState(null);
 
-  // When layers change, reset tab to a valid active one
+  // Keep selected tab valid: snap to first active whenever the set changes
+  const activeKeyString = active.map((l) => l.key).join(",");
   useEffect(() => {
-    if (bothActive) return; // keep current tab
-    if (hasFlood) setActiveTab("flood");
-    else if (hasTyphoon) setActiveTab("typhoon");
-  }, [hasFlood, hasTyphoon, bothActive]);
+    if (active.length === 0) {
+      setSelectedKey(null);
+      return;
+    }
+    if (!active.find((l) => l.key === selectedKey)) {
+      setSelectedKey(active[0].key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKeyString]);
 
-  if (!hasFlood && !hasTyphoon) return null;
+  if (active.length === 0) return null;
+
+  const compact = active.length >= 3;
+  const selected = active.find((l) => l.key === selectedKey) ?? active[0];
 
   return (
     <div
-      className="absolute bottom-12 left-4 z-[1000]
-                    bg-white/95 backdrop-blur border border-gray-200
-                    rounded-2xl shadow-lg overflow-hidden w-[210px]"
+      className="absolute bottom-6 left-3 z-[1000] pointer-events-auto"
+      style={{ width: 185 }}
     >
-      {/* Tab header — only shown when both layers active */}
-      {bothActive && (
+      <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md overflow-hidden">
+        {/* ── Tab row ── */}
         <div className="flex border-b border-gray-100">
-          <button
-            onClick={() => setActiveTab("flood")}
-            className={`flex-1 flex items-center justify-center gap-1.5
-                        px-3 py-2.5 text-[10px] font-bold tracking-wider
-                        uppercase transition-all duration-150
-                        ${
-                          activeTab === "flood"
-                            ? "text-blue-600 bg-blue-50 border-b-2 border-blue-500"
-                            : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                        }`}
-          >
-            Flood
-          </button>
-          <button
-            onClick={() => setActiveTab("typhoon")}
-            className={`flex-1 flex items-center justify-center gap-1.5
-                        px-3 py-2.5 text-[10px] font-bold tracking-wider
-                        uppercase transition-all duration-150
-                        ${
-                          activeTab === "typhoon"
-                            ? "text-purple-600 bg-purple-50 border-b-2 border-purple-500"
-                            : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                        }`}
-          >
-            <span>🌀</span> Typhoon
-          </button>
+          {active.map(({ key, label, Icon, iconColor }) => {
+            const isSelected = key === (selectedKey ?? active[0].key);
+            return (
+              <button
+                key={key}
+                onClick={() => setSelectedKey(key)}
+                title={label}
+                className={`flex-1 flex items-center justify-center gap-1
+                            py-2 text-[10px] font-semibold transition-colors
+                            border-b-2 -mb-px
+                            ${
+                              isSelected
+                                ? "border-blue-500 text-gray-700 bg-white"
+                                : "border-transparent text-gray-400 bg-gray-50 hover:text-gray-600 hover:bg-white"
+                            }`}
+              >
+                <Icon
+                  size={11}
+                  strokeWidth={2}
+                  className={isSelected ? iconColor : "text-gray-400"}
+                />
+                {/* Show text label only when fewer than 3 layers active */}
+                {!compact && <span className="truncate">{label}</span>}
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* Single-layer header — shown when only one layer active */}
-      {!bothActive && (
-        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-          <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-            {hasFlood ? "🌊 Flood Hazard" : "🌀 Typhoon"}
+        {/* ── Legend body for selected tab ── */}
+        <div className="px-3 py-2.5 flex flex-col gap-1.5">
+          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-0.5 flex items-center gap-1">
+            <selected.Icon
+              size={9}
+              strokeWidth={2}
+              className={selected.iconColor}
+            />
+            {selected.label} Legend
           </p>
+          {selected.rows.map((row) => (
+            <div key={row.label} className="flex items-start gap-2">
+              <span
+                className="w-2.5 h-2.5 rounded-sm shrink-0 mt-[1px]"
+                style={{ backgroundColor: row.color }}
+              />
+              <span className="text-[9px] text-gray-500 leading-snug">
+                {row.label}
+              </span>
+            </div>
+          ))}
         </div>
-      )}
-
-      {/* Content — fixed height, scrollable, identical for both tabs */}
-      <div className="px-4 py-3 overflow-y-auto h-[150px]">
-        {bothActive && activeTab === "flood" && <FloodContent />}
-        {bothActive && activeTab === "typhoon" && <TyphoonContent />}
-        {!bothActive && hasFlood && <FloodContent />}
-        {!bothActive && hasTyphoon && <TyphoonContent />}
       </div>
     </div>
   );
-};
-
-export default HazardLegend;
+}
