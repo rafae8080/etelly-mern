@@ -727,7 +727,7 @@ function CreateAlertModal({ onClose, onCreated }) {
                 <option value="river">River</option>
                 <option value="rainfall">Rainfall</option>
                 <option value="earthquake">Earthquake</option>
-                <option value="landslide">Landslide</option>
+                <option value="lahar">Lahar</option>
                 <option value="typhoon">Typhoon</option>
                 <option value="other">Other</option>
               </select>
