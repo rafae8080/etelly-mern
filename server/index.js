@@ -8,6 +8,8 @@ import { ObjectId } from "mongodb";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import hazardRoutes from "./routes/hazard.js";
+import alertRoutes from "./routes/alerts.js";
+import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
 
@@ -28,6 +30,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hazard", hazardRoutes);
+app.use("/api/alerts", alertRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {
@@ -140,6 +143,7 @@ mongoose
   })
   .then(() => {
     console.log("Connected to MongoDB Atlas - Database: etelly");
+    startAlertEngine(); // ← add this
 
     // Verify the connection
     const db = mongoose.connection.db;

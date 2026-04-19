@@ -107,6 +107,7 @@ router.get("/flood-forecast", async (req, res) => {
             `&models=seamless_v4`;
 
           const r = await fetch(url);
+          if (!r.ok) throw new Error(`flood-api returned ${r.status}`);
           const data = await r.json();
 
           const threshold = THRESHOLDS[point.id];
@@ -165,6 +166,8 @@ router.get("/flood-forecast", async (req, res) => {
       `&timezone=Asia%2FManila`;
 
     const rainfallRes = await fetch(rainfallUrl);
+    if (!rainfallRes.ok)
+      throw new Error(`Open-Meteo rainfall returned ${rainfallRes.status}`);
     const rainfallData = await rainfallRes.json();
 
     // 3. Overall alert = highest level across all rivers
