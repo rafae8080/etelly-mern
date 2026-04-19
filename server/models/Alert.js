@@ -4,7 +4,16 @@ import mongoose from "mongoose";
 const AlertSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: ["system", "PAGASA", "PHIVOLCS", "NDRRMC", "OCD", "GDACS", "USGS"],
+    enum: [
+      "system",
+      "PAGASA",
+      "PHIVOLCS",
+      "NDRRMC",
+      "OCD",
+      "GDACS",
+      "USGS",
+      "CDRRMO",
+    ],
     required: true,
   },
   type: {

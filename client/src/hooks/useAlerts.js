@@ -24,6 +24,18 @@ export const SOURCE_CONFIG = {
     text: "text-blue-700",
     border: "border-blue-200",
   },
+  CDRRMO: {
+    label: "CDRRMO",
+    bg: "bg-green-50",
+    text: "text-green-700",
+    border: "border-green-200",
+  },
+  USGS: {
+    label: "USGS",
+    bg: "bg-purple-50",
+    text: "text-purple-700",
+    border: "border-purple-200",
+  },
   PAGASA: {
     label: "PAGASA",
     bg: "bg-sky-50",

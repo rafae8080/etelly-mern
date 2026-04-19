@@ -7,20 +7,19 @@
  *  1. System — Flood evacuation scoring   (Open-Meteo rainfall + soil + elevation)
  *  2. System — River discharge thresholds (Open-Meteo Flood API / GloFAS v4)
  *  3. System — Heavy rainfall alert       (Open-Meteo — standalone PAGASA-class check)
- *  4. PHIVOLCS — Earthquake alerts        (USGS Earthquake API — replaces broken RSS)
+ *  4. PHIVOLCS — Earthquake alerts        (USGS Earthquake API)
  *  5. PAGASA — Typhoon alerts             (GDACS RSS TC feed — already used in hazard.js)
- *  6. NDRRMC — Situation reports          (ReliefWeb REST API — replaces scraping)
+ *  6. GDACS — Flood & volcano alerts       (GDACS RSS FL/VO feeds — replaces broken NDRRMC/ReliefWeb)
  *
  * APIs used (all free, no auth required):
  *  - Open-Meteo forecast: https://api.open-meteo.com/v1/forecast
  *  - Open-Meteo flood:    https://flood-api.open-meteo.com/v1/flood
  *  - USGS Earthquake:     https://earthquake.usgs.gov/fdsnws/event/1/query
  *  - GDACS RSS TC:        https://www.gdacs.org/xml/rss_tc_7d.xml
- *  - ReliefWeb API:       https://api.reliefweb.int/v1/reports
+ *  - GDACS RSS FL/EQ/VO: https://www.gdacs.org/xml/rss_{fl|eq|vo}_7d.xml
  */
 
 import cron from "node-cron";
-import fetch from "node-fetch";
 import Alert from "../models/Alert.js";
 
 // ─── City config ──────────────────────────────────────────────────────────────
@@ -98,7 +97,7 @@ async function runFloodEvacuationCheck() {
       `&forecast_days=2` +
       `&timezone=Asia%2FManila`;
 
-    const res = await fetch(url, { timeout: 15000 });
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);
     const data = await res.json();
 
@@ -204,7 +203,7 @@ async function runFloodEvacuationCheck() {
 async function runRiverThresholdCheck() {
   try {
     const res = await fetch("http://localhost:5000/api/hazard/flood-forecast", {
-      timeout: 15000,
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error(`flood-forecast returned ${res.status}`);
     const data = await res.json();
@@ -273,7 +272,7 @@ async function runHeavyRainfallCheck() {
       `&forecast_days=1` +
       `&timezone=Asia%2FManila`;
 
-    const res = await fetch(url, { timeout: 15000 });
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);
     const data = await res.json();
 
@@ -327,7 +326,6 @@ async function runHeavyRainfallCheck() {
 
 // ─── 4. Earthquake Alerts (USGS API) ─────────────────────────────────────────
 //
-// Replaces the broken PHIVOLCS RSS feed (malformed HTTP headers, raw TLS hack).
 // USGS FDSN Event Service: https://earthquake.usgs.gov/fdsnws/event/1/
 //
 // Parameters:
@@ -362,7 +360,9 @@ async function runEarthquakeCheck() {
       orderby: "time",
     });
 
-    const res = await fetch(`${USGS_EQ_URL}?${params}`, { timeout: 15000 });
+    const res = await fetch(`${USGS_EQ_URL}?${params}`, {
+      signal: AbortSignal.timeout(15000),
+    });
     if (!res.ok) throw new Error(`USGS API returned ${res.status}`);
     const data = await res.json();
 
@@ -408,8 +408,6 @@ async function runEarthquakeCheck() {
         severity,
         title,
         description,
-        // Use the actual earthquake location, not the city.
-        // place is e.g. "26 km ENE of Karligan, Philippines"
         location: place,
         barangays: [],
         raw: JSON.stringify({ usgsId, mag, place, depthKm, lat, lon }),
@@ -444,7 +442,7 @@ async function runEarthquakeCheck() {
 async function runTyphoonCheck() {
   try {
     const res = await fetch("http://localhost:5000/api/hazard/typhoon", {
-      timeout: 15000,
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) throw new Error(`/api/hazard/typhoon returned ${res.status}`);
     const data = await res.json();
@@ -508,216 +506,193 @@ async function runTyphoonCheck() {
   }
 }
 
-// ─── 6. NDRRMC Reports (ReliefWeb API) ───────────────────────────────────────
+// ─── 6. GDACS Multi-Hazard Check (Flood · Earthquake · Volcano) ───────────────
 //
-// Replaces brittle NDRRMC website scraping with the ReliefWeb REST API.
-// ReliefWeb is the UN OCHA humanitarian data platform — NDRRMC situation
-// reports are officially uploaded here within hours of publication.
+// Replaces the broken NDRRMC/ReliefWeb integration with direct GDACS RSS feeds.
+// GDACS is the same source already used for typhoon alerts — just different feeds.
+// Covers the same disaster types NDRRMC reports on, with faster (≤6 min) updates.
 //
-// API docs: https://apidoc.reliefweb.int/
-// Endpoint: https://api.reliefweb.int/v1/reports
+// Feeds (all free, no auth, same domain as typhoon RSS):
+//   FL — https://www.gdacs.org/xml/rss_fl_7d.xml  (floods,   past 7 days)
+//   EQ — https://www.gdacs.org/xml/rss_eq_7d.xml  (earthquakes, past 7 days)
+//   VO — https://www.gdacs.org/xml/rss_vo_7d.xml  (volcanoes,   past 7 days)
 //
-// Notes on the API:
-//   - Use GET with query string params — POST to /reports returns 410 Gone.
-//   - Filter by primary_country=174 (Philippines ReliefWeb country ID).
-//   - Filter by source shortname "NDRRMC" via the `filter` JSON query param.
-//   - Past 72 hours (wider window since NDRRMC uploads can lag 24–48 h).
-//   - No API key required; appname param is best practice.
+// GeoRSS fields used per item:
+//   gdacs:eventtype   — FL | EQ | VO | TC
+//   gdacs:alertlevel  — Green | Orange | Red
+//   gdacs:eventid     — stable numeric ID for deduplication
+//   gdacs:severity    — human-readable magnitude string (e.g. "Ms 5.5")
+//   gdacs:country     — affected country name(s)
+//   geo:lat / geo:long — event coordinates
+//   title / description / pubDate — standard RSS fields
+//
+// Filtering:
+//   - Country must include "Philippines" OR event coords within 800 km of Antipolo
+//   - Green alerts included — GDACS Green can still be significant for PH context
 
-const RELIEFWEB_URL = "https://api.reliefweb.int/v1/reports";
-const RELIEFWEB_APPNAME = "AntipoloDRRS";
+const GDACS_FEEDS = {
+  flood: "https://www.gdacs.org/xml/rss_fl_7d.xml",
+  volcano: "https://www.gdacs.org/xml/rss_vo_7d.xml",
+  // earthquake omitted — covered by USGS with better magnitude/depth detail
+};
 
-// Keywords that make a report relevant to the Antipolo / Rizal area
-const NDRRMC_AREA_KEYWORDS = [
-  "antipolo",
-  "rizal",
-  "metro manila",
-  "ncr",
-  "marikina",
-  "calabarzon",
-  "luzon",
-  "region iv",
-];
+// Maximum distance from Antipolo to include an event (km)
+const GDACS_RADIUS_KM = 800;
 
-async function runNDRRMCCheck() {
-  try {
-    // ReliefWeb GET query — filter JSON encoded in query string
-    // primary_country id 174 = Philippines
-    // source shortname NDRRMC
-    const filter = JSON.stringify({
-      operator: "AND",
-      conditions: [
-        { field: "primary_country", value: 174 },
-        { field: "source.shortname", value: "NDRRMC" },
-      ],
-    });
+async function runGDACSCheck() {
+  let totalSaved = 0;
 
-    const fields = JSON.stringify({
-      include: ["title", "body", "date.created", "source.shortname", "url"],
-    });
+  for (const [hazardType, feedUrl] of Object.entries(GDACS_FEEDS)) {
+    try {
+      const res = await fetch(feedUrl, {
+        headers: { Accept: "application/rss+xml, application/xml, text/xml" },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok)
+        throw new Error(`GDACS ${hazardType} feed returned ${res.status}`);
+      const xml = await res.text();
 
-    const params = new URLSearchParams({
-      appname: RELIEFWEB_APPNAME,
-      "filter[operator]": "AND",
-      limit: "10",
-      sort: "date.created:desc",
-      "fields[include][]": ["title", "body", "date.created"],
-    });
+      const items = parseGDACSFeed(xml);
+      let saved = 0;
 
-    // Use the simpler query-string form that reliefweb v1 supports reliably
-    const qs = new URLSearchParams({
-      appname: RELIEFWEB_APPNAME,
-      "filter[conditions][0][field]": "primary_country",
-      "filter[conditions][0][value]": "174",
-      "filter[conditions][1][field]": "source.shortname",
-      "filter[conditions][1][value]": "NDRRMC",
-      "filter[operator]": "AND",
-      "fields[include][0]": "title",
-      "fields[include][1]": "body",
-      "fields[include][2]": "date.created",
-      "fields[include][3]": "source.shortname",
-      sort: "date.created:desc",
-      limit: "10",
-    });
+      for (const item of items) {
+        // Filter — must be Philippines or within radius
+        const inPhilippines = /philippines/i.test(item.country ?? "");
+        const distKm =
+          item.lat != null && item.lon != null
+            ? haversineKm(CITY.lat, CITY.lon, item.lat, item.lon)
+            : Infinity;
 
-    const res = await fetch(`${RELIEFWEB_URL}?${qs}`, {
-      headers: { Accept: "application/json" },
-      timeout: 15000,
-    });
+        if (!inPhilippines && distKm > GDACS_RADIUS_KM) continue;
 
-    if (!res.ok) throw new Error(`ReliefWeb API returned ${res.status}`);
-    const data = await res.json();
+        // Dedupe by GDACS event ID
+        const rawKey = `gdacs_${item.eventType}_${item.eventId}`;
+        const existing = await Alert.findOne({ rawKey });
+        if (existing) continue;
 
-    const reports = data.data ?? [];
-    console.log(
-      `[AlertEngine] NDRRMC (ReliefWeb) — ${reports.length} report(s) fetched`,
-    );
+        const { severity, title, description } = buildGDACSAlert(item, distKm);
 
-    let saved = 0;
-    for (const report of reports) {
-      const fields = report.fields ?? {};
-      const title = fields.title ?? "";
-      const body = fields.body ?? "";
-      const combinedText = `${title} ${body}`.toLowerCase();
+        await Alert.create({
+          source: "GDACS",
+          type: hazardType,
+          severity,
+          title,
+          description,
+          location: item.country
+            ? item.country.split(";")[0].trim()
+            : `${item.lat?.toFixed(2)}°N, ${item.lon?.toFixed(2)}°E`,
+          barangays: [],
+          raw: JSON.stringify({
+            eventId: item.eventId,
+            alertLevel: item.alertLevel,
+            severityText: item.severityText,
+            country: item.country,
+          }),
+          rawKey,
+          isActive: true,
+          createdAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+          updatedAt: new Date(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
 
-      // Only process reports relevant to our area
-      if (!NDRRMC_AREA_KEYWORDS.some((k) => combinedText.includes(k))) {
-        continue;
+        saved++;
+        totalSaved++;
+        console.log(`[AlertEngine] GDACS ${hazardType} — Saved: ${title}`);
       }
 
-      // Parse type and severity from report text
-      const parsed = parseNDRRMCReport(title, body);
-      if (!parsed) continue;
-
-      // Dedupe by ReliefWeb report ID
-      const rawKey = `reliefweb_${report.id}`;
-      const existing = await Alert.findOne({ rawKey });
-      if (existing) continue;
-
-      const createdAt = new Date(fields.date?.created ?? Date.now());
-
-      await Alert.create({
-        source: "NDRRMC",
-        type: parsed.type,
-        severity: parsed.severity,
-        title: title.slice(0, 120),
-        description: parsed.description,
-        location: CITY.name,
-        barangays: [],
-        raw: body.slice(0, 500),
-        rawKey,
-        isActive: true,
-        createdAt,
-        updatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
-      });
-
-      saved++;
-      console.log(`[AlertEngine] NDRRMC — Saved: ${title.slice(0, 80)}`);
+      console.log(
+        `[AlertEngine] GDACS ${hazardType} — ${items.length} item(s) fetched, ${saved} saved`,
+      );
+    } catch (err) {
+      console.error(
+        `[AlertEngine] GDACS ${hazardType} check failed:`,
+        err.message,
+      );
     }
-
-    console.log(
-      `[AlertEngine] NDRRMC — ${saved}/${reports.length} report(s) saved`,
-    );
-  } catch (err) {
-    console.error(
-      "[AlertEngine] NDRRMC (ReliefWeb) check failed:",
-      err.message,
-    );
   }
+
+  console.log(`[AlertEngine] GDACS — ${totalSaved} new alert(s) total`);
 }
 
-// Parse NDRRMC report title + body into type/severity/description
-function parseNDRRMCReport(title, body) {
-  const t = `${title} ${body}`.toLowerCase();
+// Parse a GDACS RSS feed XML string into a plain array of event objects.
+// Uses regex extraction — no XML parser dependency needed.
+function parseGDACSFeed(xml) {
+  const items = [];
+  const itemBlocks = xml.match(/<item[\s\S]*?<\/item>/gi) ?? [];
 
-  // Determine TYPE
-  let type = "other";
-  if (t.includes("flood") || t.includes("baha")) type = "flood";
-  else if (t.includes("rainfall") || t.includes("rain")) type = "rainfall";
-  else if (t.includes("earthquake") || t.includes("quake")) type = "earthquake";
-  else if (
-    t.includes("typhoon") ||
-    t.includes("tropical storm") ||
-    t.includes("bagyo")
-  )
-    type = "typhoon";
-  else if (t.includes("lahar") || t.includes("volcanic")) type = "lahar";
+  for (const block of itemBlocks) {
+    const get = (tag) => {
+      const m = block.match(
+        new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"),
+      );
+      return m ? m[1].replace(/<!\[CDATA\[([\s\S]*?)]]>/g, "$1").trim() : null;
+    };
+    const lat = parseFloat(
+      get("geo:lat") ?? get("georss:point")?.split(" ")[0],
+    );
+    const lon = parseFloat(
+      get("geo:long") ?? get("georss:point")?.split(" ")[1],
+    );
 
-  // Skip pure press releases (no hazard content)
-  if (
-    type === "other" &&
-    !/situation|advisory|alert|warning|bulletin|sitrep/i.test(t)
-  ) {
-    return null;
+    items.push({
+      title: get("title"),
+      description: get("description"),
+      pubDate: get("pubDate"),
+      eventType: get("gdacs:eventtype"),
+      eventId: get("gdacs:eventid"),
+      alertLevel: get("gdacs:alertlevel"), // Green | Orange | Red
+      severityText: get("gdacs:severity"), // e.g. "Ms 5.5" or "Rf 120mm"
+      country: get("gdacs:country"),
+      lat: isNaN(lat) ? null : lat,
+      lon: isNaN(lon) ? null : lon,
+    });
   }
 
-  // Determine SEVERITY
+  return items;
+}
+
+// Map a parsed GDACS item to severity / title / description strings.
+function buildGDACSAlert(item, distKm) {
+  const level = (item.alertLevel ?? "green").toLowerCase();
+  const proximityNote =
+    distKm < Infinity ? ` — ${distKm.toFixed(0)} km from ${CITY.name}` : "";
+
+  // Severity mapping
+  // Red   → critical (escalate to evacuate for very close events)
+  // Orange → warning
+  // Green  → watch
   let severity = "watch";
-  if (
-    t.includes("evacuate") ||
-    t.includes("evacuation") ||
-    t.includes("red rainfall") ||
-    t.includes("extreme rainfall") ||
-    t.includes("signal no. 4") ||
-    t.includes("signal no. 5") ||
-    t.includes("signal #4") ||
-    t.includes("signal #5")
-  ) {
-    severity = "evacuate";
-  } else if (
-    t.includes("critical") ||
-    t.includes("imminent") ||
-    t.includes("intense rainfall") ||
-    t.includes("signal no. 3") ||
-    t.includes("signal #3") ||
-    t.includes("magnitude 6") ||
-    t.includes("magnitude 7")
-  ) {
-    severity = "critical";
-  } else if (
-    t.includes("warning") ||
-    t.includes("orange rainfall") ||
-    t.includes("heavy rainfall") ||
-    t.includes("signal no. 2") ||
-    t.includes("signal #2") ||
-    t.includes("magnitude 5")
-  ) {
+  if (level === "red") {
+    severity = distKm < 150 ? "evacuate" : "critical";
+  } else if (level === "orange") {
     severity = "warning";
   }
 
-  // Build description from first 2 meaningful sentences of the body
-  const sentences = body
-    .replace(/\n+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 20);
-  const description =
-    sentences.slice(0, 2).join(" ").slice(0, 400) ||
-    body.slice(0, 400) ||
-    title;
+  const typeLabel =
+    {
+      FL: "Flood",
+      EQ: "Earthquake",
+      VO: "Volcanic Activity",
+      TC: "Tropical Cyclone",
+    }[item.eventType ?? ""] ?? "Hazard";
 
-  return { type, severity, description };
+  const title = `GDACS ${level.toUpperCase()} — ${typeLabel} in ${
+    item.country?.split(";")[0].trim() ?? "Philippines Region"
+  }${proximityNote}`;
+
+  // Build description from RSS description field, trimmed to 400 chars
+  const rawDesc = (item.description ?? item.title ?? "")
+    .replace(/<[^>]+>/g, " ") // strip any embedded HTML
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const severityNote = item.severityText
+    ? ` Severity: ${item.severityText}.`
+    : "";
+  const description =
+    (rawDesc.length > 10 ? rawDesc.slice(0, 380) : title) + severityNote;
+
+  return { severity, title, description };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -779,97 +754,11 @@ async function upsertAlert({ _dedupeKey, source, ...alertData }) {
   );
 }
 
-// ─── One-time migration ───────────────────────────────────────────────────────
+// ─── One-time migration (retired) ────────────────────────────────────────────
 //
-// Cleans up alerts saved before these fixes were deployed:
-//   1. Earthquake alerts: location was "Antipolo City, Rizal" — extract the real
-//      location from the raw JSON field and patch it in.
-//   2. All alerts: strip trailing "Source: X" sentences from descriptions since
-//      the source badge in the UI already communicates this.
-//
-// Runs once on startup, safe to re-run (idempotent).
-
-async function runMigration() {
-  try {
-    // 1. Fix earthquake locations — find alerts where location is still the city
-    //    and we have a raw JSON field with the real place name
-    const staleEq = await Alert.find({
-      type: "earthquake",
-      location: CITY.name,
-      raw: { $exists: true, $ne: "" },
-    });
-
-    for (const alert of staleEq) {
-      try {
-        const rawData = JSON.parse(alert.raw);
-        if (rawData.place && rawData.place !== CITY.name) {
-          await Alert.findByIdAndUpdate(alert._id, {
-            $set: { location: rawData.place, updatedAt: new Date() },
-          });
-          console.log(
-            `[Migration] EQ location fixed: "${rawData.place}" (id: ${alert._id})`,
-          );
-        }
-      } catch {
-        // skip malformed raw
-      }
-    }
-
-    // 2. Strip "Source: ..." from the end of all alert descriptions
-    const sourcePattern = /\s*Source:[^.]+\.\s*$/i;
-    const alertsWithSource = await Alert.find({
-      description: { $regex: "Source:", $options: "i" },
-      isActive: true,
-    });
-
-    for (const alert of alertsWithSource) {
-      const cleaned = alert.description.replace(sourcePattern, "").trim();
-      if (cleaned !== alert.description) {
-        await Alert.findByIdAndUpdate(alert._id, {
-          $set: { description: cleaned, updatedAt: new Date() },
-        });
-        console.log(`[Migration] Description cleaned (id: ${alert._id})`);
-      }
-    }
-
-    // 3. Fix typhoon location — was "Antipolo City, Rizal", should be coords from description
-    const staleTyphoon = await Alert.find({
-      type: "typhoon",
-      isActive: true,
-    });
-
-    for (const alert of staleTyphoon) {
-      const updates = {};
-
-      // Fix location
-      if (alert.location === CITY.name) {
-        const coordMatch = alert.description.match(
-          /Current position:\s*([\d.]+)°N,\s*([\d.]+)°E/i,
-        );
-        if (coordMatch) {
-          updates.location = `${coordMatch[1]}°N, ${coordMatch[2]}°E`;
-        }
-      }
-
-      // Fix source — old alerts saved as "system" or "PAGASA" should be "GDACS"
-      if (alert.source === "system" || alert.source === "PAGASA") {
-        updates.source = "GDACS";
-      }
-
-      if (Object.keys(updates).length > 0) {
-        updates.updatedAt = new Date();
-        await Alert.findByIdAndUpdate(alert._id, { $set: updates });
-        console.log(
-          `[Migration] Typhoon fixed ${JSON.stringify(updates)} (id: ${alert._id})`,
-        );
-      }
-    }
-
-    console.log("[Migration] Complete.");
-  } catch (err) {
-    console.error("[Migration] Failed:", err.message);
-  }
-}
+// Previously fixed stale earthquake locations, stripped "Source:" suffixes from
+// descriptions, and patched typhoon source/location fields. All existing alerts
+// have been corrected. Function removed — safe to delete this comment too.
 
 // ─── Cron scheduler ──────────────────────────────────────────────────────────
 
@@ -887,14 +776,11 @@ async function runAgencyChecks() {
   await Promise.allSettled([
     runEarthquakeCheck(),
     runTyphoonCheck(),
-    runNDRRMCCheck(),
+    runGDACSCheck(),
   ]);
 }
 
 export function startAlertEngine() {
-  // Clean up stale data from before the location/description fixes
-  runMigration();
-
   // Run immediately on startup
   runSystemChecks();
   runAgencyChecks();
@@ -905,7 +791,7 @@ export function startAlertEngine() {
     timezone: "Asia/Manila",
   });
 
-  // Earthquake + typhoon + NDRRMC every 30 minutes
+  // Earthquake + typhoon + GDACS multi-hazard every 30 minutes
   cron.schedule("*/30 * * * *", runAgencyChecks, {
     scheduled: true,
     timezone: "Asia/Manila",
