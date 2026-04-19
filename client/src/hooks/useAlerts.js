@@ -30,8 +30,20 @@ export const SOURCE_CONFIG = {
     text: "text-sky-700",
     border: "border-sky-200",
   },
+  GDACS: {
+    label: "GDACS",
+    bg: "bg-sky-50",
+    text: "text-sky-700",
+    border: "border-sky-200",
+  },
   PHIVOLCS: {
-    label: "PHIVOLCS",
+    label: "PHIVOLCS / USGS",
+    bg: "bg-purple-50",
+    text: "text-purple-700",
+    border: "border-purple-200",
+  },
+  USGS: {
+    label: "USGS",
     bg: "bg-purple-50",
     text: "text-purple-700",
     border: "border-purple-200",

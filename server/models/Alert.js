@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 const AlertSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: ["system", "PAGASA", "PHIVOLCS", "NDRRMC", "OCD"],
+    enum: ["system", "PAGASA", "PHIVOLCS", "NDRRMC", "OCD", "GDACS", "USGS"],
     required: true,
   },
   type: {
@@ -27,7 +27,7 @@ const AlertSchema = new mongoose.Schema({
   },
   title: { type: String, required: true },
   description: { type: String, required: true },
-  location: { type: String, default: "Antipolo City, Rizal" },
+  location: { type: String, default: "" },
   barangays: [String],
   raw: String,
   isActive: { type: Boolean, default: true },

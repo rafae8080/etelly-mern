@@ -15,8 +15,6 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
   Plus,
   RefreshCw,
   Search,
@@ -26,6 +24,7 @@ import {
   MapPin,
   Clock,
   Navigation,
+  Trash2,
 } from "lucide-react";
 import { useAlerts, SOURCE_CONFIG, SEVERITY_CONFIG } from "../hooks/useAlerts";
 
@@ -40,6 +39,16 @@ function timeAgo(dateStr) {
   return `${Math.floor(mins / 1440)}d ago`;
 }
 
+// Forward-looking: how long until a future date
+function timeUntil(dateStr) {
+  if (!dateStr) return "";
+  const mins = Math.floor((new Date(dateStr) - Date.now()) / 60000);
+  if (mins <= 0) return "expired";
+  if (mins < 60) return `${mins}m`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+  return `${Math.floor(mins / 1440)}d`;
+}
+
 // ─── Severity icon ─────────────────────────────────────────────────────────────
 
 function SeverityIcon({ severity, size = 16 }) {
@@ -49,10 +58,86 @@ function SeverityIcon({ severity, size = 16 }) {
   return <Eye size={size} />;
 }
 
+// ─── Dismiss Confirmation Modal ────────────────────────────────────────────────
+
+function DismissConfirmModal({ alert, onConfirm, onCancel }) {
+  const sev = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.watch;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 border border-gray-100 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center ${sev.bg} ${sev.text}`}
+            >
+              <Trash2 size={13} />
+            </div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Remove Alert
+            </h2>
+          </div>
+          <button
+            onClick={onCancel}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+          >
+            <X size={13} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Are you sure you want to remove this alert?
+          </p>
+          {/* Alert preview */}
+          <div
+            className={`px-3 py-2.5 rounded-lg border-l-4 ${sev.leftBorder} bg-gray-50 border border-gray-100`}
+          >
+            <p className="text-xs font-semibold text-gray-800 leading-snug">
+              {alert.title}
+            </p>
+            {alert.location && (
+              <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                <MapPin size={9} />
+                {alert.location}
+              </p>
+            )}
+          </div>
+          <p className="text-xs text-gray-400">
+            This will hide the alert for all users. It cannot be undone from
+            this page.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1.5"
+          >
+            <Trash2 size={13} />
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Single Alert Tile ─────────────────────────────────────────────────────────
 
-function AlertTile({ alert, onDismiss }) {
-  const [expanded, setExpanded] = useState(false);
+function AlertTile({ alert, onDismissRequest }) {
   const sev = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.watch;
   const src = SOURCE_CONFIG[alert.source] ?? SOURCE_CONFIG.system;
 
@@ -64,6 +149,7 @@ function AlertTile({ alert, onDismiss }) {
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
+          {/* Severity icon */}
           <div
             className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center
                         justify-center ${sev.bg} ${sev.text}`}
@@ -72,6 +158,7 @@ function AlertTile({ alert, onDismiss }) {
           </div>
 
           <div className="flex-1 min-w-0">
+            {/* Header row: severity · source · type — all on the same line */}
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sev.bg} ${sev.text}`}
@@ -88,16 +175,17 @@ function AlertTile({ alert, onDismiss }) {
               </span>
             </div>
 
+            {/* Title */}
             <h3 className="text-sm font-semibold text-gray-900 leading-snug">
               {alert.title}
             </h3>
 
-            <p
-              className={`text-sm text-gray-600 mt-1 leading-relaxed ${expanded ? "" : "line-clamp-2"}`}
-            >
+            {/* Full description — no expand/collapse */}
+            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
               {alert.description}
             </p>
 
+            {/* Location — shows actual alert location, not just city */}
             {alert.location && (
               <div className="flex items-center gap-1 mt-1.5">
                 <MapPin size={10} className="text-gray-400 flex-shrink-0" />
@@ -107,35 +195,30 @@ function AlertTile({ alert, onDismiss }) {
               </div>
             )}
 
+            {/* Time */}
             <div className="flex items-center gap-1 mt-2">
               <Clock size={10} className="text-gray-300" />
               <span className="text-[11px] text-gray-400">
                 {timeAgo(alert.createdAt)}
-                {alert.expiresAt && (
-                  <span className="ml-2 text-gray-300">
-                    · expires {timeAgo(alert.expiresAt)}
-                  </span>
-                )}
+                {alert.expiresAt &&
+                  timeUntil(alert.expiresAt) !== "expired" && (
+                    <span className="ml-2 text-gray-300">
+                      · expires in {timeUntil(alert.expiresAt)}
+                    </span>
+                  )}
               </span>
             </div>
           </div>
 
-          <div className="flex-shrink-0 flex items-center gap-1">
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
-              title={expanded ? "Collapse" : "Expand"}
-            >
-              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
-            <button
-              onClick={() => onDismiss(alert._id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-              title="Dismiss alert"
-            >
-              <X size={13} />
-            </button>
-          </div>
+          {/* Dismiss button — triggers confirmation modal */}
+          <button
+            onClick={() => onDismissRequest(alert)}
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center
+                       text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            title="Remove alert"
+          >
+            <X size={13} />
+          </button>
         </div>
       </div>
     </div>
@@ -210,7 +293,7 @@ async function reverseGeocode(lat, lon) {
 
 // ─── Location Picker ───────────────────────────────────────────────────────────
 
-function LocationPicker({ location, onLocationChange }) {
+function LocationPicker({ location, onLocationChange, required = false }) {
   const [query, setQuery] = useState(location ?? "");
   const [suggestions, setSuggestions] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -221,7 +304,6 @@ function LocationPicker({ location, onLocationChange }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
-  // Pending pin when a suggestion is picked before the map mounts
   const pendingRef = useRef(null);
 
   // ── Search ─────────────────────────────────────────────────────────────────
@@ -229,7 +311,6 @@ function LocationPicker({ location, onLocationChange }) {
     clearTimeout(debounceRef.current);
     const q = query.trim();
 
-    // Don't search if user just confirmed a pick
     if (!q || q.length < 3 || q === confirmed) {
       setSuggestions([]);
       return;
@@ -314,9 +395,7 @@ function LocationPicker({ location, onLocationChange }) {
       markerRef.current
         .bindPopup(
           `<div style="font-size:12px;max-width:200px;line-height:1.4">${label}</div>`,
-          {
-            closeButton: false,
-          },
+          { closeButton: false },
         )
         .openPopup();
     }
@@ -331,7 +410,7 @@ function LocationPicker({ location, onLocationChange }) {
       if (cancelled || !mapRef.current || mapInstanceRef.current) return;
 
       const map = L.map(mapRef.current, { zoomControl: true }).setView(
-        [14.5882, 121.1763], // Antipolo City Hall
+        [14.5882, 121.1763],
         14,
       );
       mapInstanceRef.current = map;
@@ -341,11 +420,9 @@ function LocationPicker({ location, onLocationChange }) {
         maxZoom: 19,
       }).addTo(map);
 
-      // Restrict to Antipolo bounding box
       const bounds = L.latLngBounds([14.52, 121.08], [14.7, 121.26]);
       map.setMaxBounds(bounds.pad(0.05));
 
-      // Tap to place pin + reverse geocode
       map.on("click", async (e) => {
         const { lat, lng } = e.latlng;
         dropPin(map, lat, lng, null);
@@ -357,14 +434,11 @@ function LocationPicker({ location, onLocationChange }) {
         markerRef.current
           ?.bindPopup(
             `<div style="font-size:12px;max-width:200px;line-height:1.4">${addr}</div>`,
-            {
-              closeButton: false,
-            },
+            { closeButton: false },
           )
           .openPopup();
       });
 
-      // Place pending pin (suggestion picked before map opened)
       if (pendingRef.current) {
         const { lat, lon, addr } = pendingRef.current;
         pendingRef.current = null;
@@ -394,7 +468,6 @@ function LocationPicker({ location, onLocationChange }) {
     }
   };
 
-  // Shorten a Nominatim display_name for the dropdown
   const shortLabel = (displayName) => {
     const parts = displayName.split(", ");
     return { primary: parts[0], secondary: parts.slice(1, 4).join(", ") };
@@ -403,7 +476,7 @@ function LocationPicker({ location, onLocationChange }) {
   return (
     <div className="space-y-2">
       <label className="text-xs font-semibold text-gray-500 block">
-        Affected Location
+        Affected Location {required && <span className="text-red-500">*</span>}
       </label>
 
       {/* Search input */}
@@ -455,26 +528,26 @@ function LocationPicker({ location, onLocationChange }) {
             className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border
                           border-gray-200 rounded-xl shadow-xl overflow-hidden"
           >
-            {suggestions.map((s, i) => {
-              const { primary, secondary } = shortLabel(s.display_name);
+            {suggestions.map((item, i) => {
+              const { primary, secondary } = shortLabel(item.display_name);
               return (
                 <button
-                  key={s.place_id ?? i}
+                  key={i}
                   type="button"
-                  onClick={() => pickSuggestion(s)}
-                  className="w-full text-left px-3 py-3 hover:bg-blue-50 transition-colors
-                             border-b border-gray-50 last:border-0 flex items-start gap-2.5"
+                  onClick={() => pickSuggestion(item)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors
+                             border-b border-gray-50 last:border-0"
                 >
-                  <MapPin
-                    size={13}
-                    className="text-red-400 flex-shrink-0 mt-0.5"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">
-                      {primary}
-                    </div>
-                    <div className="text-[11px] text-gray-400 truncate">
-                      {secondary}
+                  <div className="flex items-start gap-2">
+                    <MapPin
+                      size={11}
+                      className="text-red-400 flex-shrink-0 mt-0.5"
+                    />
+                    <div>
+                      <p className="text-xs font-medium text-gray-800">
+                        {primary}
+                      </p>
+                      <p className="text-[11px] text-gray-400">{secondary}</p>
                     </div>
                   </div>
                 </button>
@@ -557,6 +630,12 @@ function CreateAlertModal({ onClose, onCreated }) {
       setFormError("Title and description are required.");
       return;
     }
+    if (!form.location.trim()) {
+      setFormError(
+        "Affected location is required. Search or pin a location on the map.",
+      );
+      return;
+    }
     setFormError("");
     setSubmitting(true);
     try {
@@ -571,7 +650,7 @@ function CreateAlertModal({ onClose, onCreated }) {
           severity: form.severity,
           title: form.title.trim(),
           description: form.description.trim(),
-          location: form.location || "Antipolo City, Rizal",
+          location: form.location.trim(),
           barangays: [],
         }),
       });
@@ -685,7 +764,7 @@ function CreateAlertModal({ onClose, onCreated }) {
           {/* Title */}
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">
-              Title
+              Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -703,7 +782,7 @@ function CreateAlertModal({ onClose, onCreated }) {
           {/* Description */}
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1 block">
-              Description
+              Description <span className="text-red-500">*</span>
             </label>
             <textarea
               value={form.description}
@@ -718,12 +797,13 @@ function CreateAlertModal({ onClose, onCreated }) {
             />
           </div>
 
-          {/* Location picker */}
+          {/* Location picker — required, no silent fallback */}
           <LocationPicker
             location={form.location}
             onLocationChange={(loc) =>
               setForm((f) => ({ ...f, location: loc }))
             }
+            required
           />
 
           {/* Form error */}
@@ -800,11 +880,20 @@ export default function AlertsPage() {
     useAlerts();
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
+  // Alert pending dismissal confirmation
+  const [pendingDismiss, setPendingDismiss] = useState(null);
 
   const filtered =
     activeFilter === "all"
       ? alerts
       : alerts.filter((a) => a.severity === activeFilter);
+
+  const handleDismissConfirm = () => {
+    if (pendingDismiss) {
+      dismiss(pendingDismiss._id);
+      setPendingDismiss(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -916,15 +1005,28 @@ export default function AlertsPage() {
           </div>
         )}
         {filtered.map((alert) => (
-          <AlertTile key={alert._id} alert={alert} onDismiss={dismiss} />
+          <AlertTile
+            key={alert._id}
+            alert={alert}
+            onDismissRequest={setPendingDismiss}
+          />
         ))}
       </div>
 
-      {/* Modal */}
+      {/* Create Alert Modal */}
       {showModal && (
         <CreateAlertModal
           onClose={() => setShowModal(false)}
           onCreated={refresh}
+        />
+      )}
+
+      {/* Dismiss Confirmation Modal */}
+      {pendingDismiss && (
+        <DismissConfirmModal
+          alert={pendingDismiss}
+          onConfirm={handleDismissConfirm}
+          onCancel={() => setPendingDismiss(null)}
         />
       )}
     </div>
