@@ -1,5 +1,12 @@
 import { useCallback, useEffect } from "react";
-import { Waves, Droplets, X, WifiOff, FlaskConical } from "lucide-react";
+import {
+  Waves,
+  Droplets,
+  X,
+  WifiOff,
+  FlaskConical,
+  TriangleAlert,
+} from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
 // ── Dev test mode ─────────────────────────────────────────────────────────
@@ -83,7 +90,7 @@ const ALERT_CONFIG = {
     border: "border-green-200",
     text: "text-green-700",
     label: "Normal Levels",
-    icon: "💧",
+    icon: <Droplets className="w-4 h-4 text-blue-600" />,
     buttonBg: "bg-white",
     buttonBorder: "border-gray-300",
     iconColor: "text-blue-500",
@@ -93,7 +100,7 @@ const ALERT_CONFIG = {
     border: "border-amber-300",
     text: "text-amber-700",
     label: "Elevated — Watch",
-    icon: "⚠️",
+    icon: <TriangleAlert className="w-4 h-4 text-amber-500" />,
     buttonBg: "bg-amber-50",
     buttonBorder: "border-amber-400",
     iconColor: "text-amber-500",

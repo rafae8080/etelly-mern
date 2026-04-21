@@ -1,10 +1,30 @@
-// ─── Summary bar ───────────────────────────────────────────────────────────────
+// ─── Summary Bar Redesign ─────────────────────────────────────────────────────
 
 const SUMMARY_ITEMS = [
-  { key: "evacuate", label: "Evacuate", color: "bg-red-600 text-white" },
-  { key: "critical", label: "Critical", color: "bg-red-100 text-red-700" },
-  { key: "warning",  label: "Warning",  color: "bg-amber-100 text-amber-700" },
-  { key: "watch",    label: "Watch",    color: "bg-blue-50 text-blue-700" },
+  {
+    key: "evacuate",
+    label: "Evacuate",
+    color: "bg-red-600 text-white",
+    border: "border-red-700",
+  },
+  {
+    key: "critical",
+    label: "Critical",
+    color: "bg-red-100 text-red-800",
+    border: "border-red-200",
+  },
+  {
+    key: "warning",
+    label: "Warning",
+    color: "bg-amber-100 text-amber-800",
+    border: "border-amber-200",
+  },
+  {
+    key: "watch",
+    label: "Watch",
+    color: "bg-blue-100 text-blue-800",
+    border: "border-blue-200",
+  },
 ];
 
 export default function SummaryBar({ counts }) {
@@ -12,14 +32,25 @@ export default function SummaryBar({ counts }) {
   if (items.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div
+      className="grid gap-2 w-full"
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+    >
       {items.map((i) => (
-        <span
+        <div
           key={i.key}
-          className={`text-xs font-bold px-3 py-1 rounded-full ${i.color}`}
+          className={`flex flex-col items-center justify-center py-3 px-2 rounded-md border ${i.color} ${i.border} shadow-sm`}
         >
-          {counts[i.key]} {i.label}
-        </span>
+          {/* Large count on top */}
+          <span className="text-xl font-black leading-none">
+            {counts[i.key]}
+          </span>
+
+          {/* Label on bottom */}
+          <span className="text-[10px] uppercase tracking-wider font-bold mt-1 opacity-90">
+            {i.label}
+          </span>
+        </div>
       ))}
     </div>
   );

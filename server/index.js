@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import hazardRoutes from "./routes/hazard.js";
 import alertRoutes from "./routes/alerts.js";
+import reportRoutes from "./routes/reports.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
@@ -31,6 +32,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hazard", hazardRoutes);
 app.use("/api/alerts", alertRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {

@@ -1,131 +1,39 @@
-/**
- * HazardMapPage.jsx — updated excerpt
- *
- * Changes from original:
- *  1. Imports useAlerts hook → counts active alerts
- *  2. Adds an alert badge on the Alerts nav link / page header
- *  3. FloodForecastPanel river threshold changes now reflected immediately
- *     (the alert engine handles persistence; map just shows current state)
- *
- * Only the additions/changes are shown below — merge them into your
- * existing HazardMapPage.jsx.
- *
- * ─── ADD these imports at the top of HazardMapPage.jsx ───────────────────────
- */
-
-// ADD to your existing imports:
-import { useAlerts } from "../hooks/useAlerts";
-
-/**
- * ─── ADD inside the HazardMapPage component body ─────────────────────────────
- *
- * Place this line alongside your other useState/useEffect declarations:
- */
-
-//   const { counts: alertCounts } = useAlerts();
-
-/**
- * ─── REPLACE the title bar section with this ─────────────────────────────────
- *
- * This adds a live alert badge next to the page title.
- * The badge turns red when there are evacuate/critical alerts.
- */
-
-export function HazardMapTitleBar({
-  cityName,
-  offlineInfo,
-  formatDateTime,
-  formatTime,
-  now,
-  alertCounts,
-}) {
-  const hasCritical =
-    (alertCounts?.evacuate ?? 0) + (alertCounts?.critical ?? 0) > 0;
-  const hasWarning = alertCounts?.warning > 0;
-
-  return (
-    <div className="mb-4 flex items-center justify-between flex-shrink-0">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
-
-          {/* Live alert badge — only shown when alerts exist */}
-          {alertCounts?.total > 0 && (
-            <span
-              className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5
-                          ${
-                            hasCritical
-                              ? "bg-red-600 text-white animate-pulse"
-                              : hasWarning
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-blue-50 text-blue-700"
-                          }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${hasCritical ? "bg-white" : "bg-current"}`}
-              />
-              {alertCounts.total} active alert
-              {alertCounts.total !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-
-        <p className="text-sm text-slate-500 mt-0.5">
-          {cityName} — Disaster Preparedness Viewer
-        </p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {offlineInfo.isOffline ? (
-          <>
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-sm text-amber-600">
-              Last update:{" "}
-              <span className="font-semibold">
-                {formatDateTime(offlineInfo.cachedAt)}
-              </span>
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-sm text-slate-600 tabular-nums">
-              {formatTime(now)}
-            </span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * ─── Full updated HazardMapPage (complete file, replaces original) ────────────
- */
-
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useMap } from "react-leaflet";
-import { Crosshair, Map, Bell } from "lucide-react";
+import { Crosshair, Map, Droplets } from "lucide-react";
 
+// core
 import BaseMap from "../components/map/core/BaseMap";
 import LayerControlPanel from "../components/map/core/LayerControlPanel";
 import MapStatusBar from "../components/map/core/MapStatusBar";
 
+// flood
 import FloodLayer, {
   UserLocationMarker,
 } from "../components/map/flood/FloodLayer";
 import FloodHazardLayer from "../components/map/flood/FloodHazardLayer";
 import FloodForecastPanel from "../components/map/flood/FloodForecastPanel";
 
+// typhoon
 import TyphoonLayer, {
   TyphoonPanel,
 } from "../components/map/typhoon/TyphoonLayer";
 
+//landslide
 import LandslideForecastPanel from "../components/map/landslide/LandslideForecastPanel";
 import LandslideLayer, {
   LandslideHazardLayer,
 } from "../components/map/landslide/LandslideLayer";
 
+//eartquake
+import EarthquakeLayer from "../components/map/earthquake/EarthquakeLayer";
+import EarthquakePanel from "../components/map/earthquake/EarthquakePanel";
+
+//reports
+import ReportsLayer from "../components/map/reports/ReportsLayer";
+import ReportFilter from "../components/map/ui/ReportFilter";
+
+// ui
 import HazardLegend from "../components/map/ui/HazardLegend";
 import BasemapPicker from "../components/map/ui/BasemapPicker";
 import OfflineBanner from "../components/map/ui/OfflineBanner";
@@ -134,8 +42,9 @@ const CITY_CENTER = [14.5882, 121.1763];
 const CITY_NAME = "Antipolo City, Rizal";
 const CITY_ZOOM = 13;
 
-const STACK_TOP = 90;
-const STACK_STEP = 40;
+// Each button slot is 30px tall + 10px gap = 40px step
+const STACK_TOP = 90; // px from map top where stack starts (below leaflet +/- zoom)
+const STACK_STEP = 40; // px per button slot
 
 function MapReadyHandler({ onReady }) {
   const map = useMap();
@@ -150,16 +59,26 @@ function MapReadyHandler({ onReady }) {
 function FlyToUser({ trigger, userPos }) {
   const map = useMap();
   const prevTrigger = useRef(0);
+
   useEffect(() => {
     if (trigger === prevTrigger.current) return;
     prevTrigger.current = trigger;
+
     if (userPos) {
       map.flyTo(userPos, 17, { duration: 1.2 });
+
+      // Force Leaflet to refresh tiles/vectors after the flight begins
+      // and again once it finishes to ensure nothing "disappears"
       map.invalidateSize();
-      const timer = setTimeout(() => map.invalidateSize(), 1300);
+
+      const timer = setTimeout(() => {
+        map.invalidateSize();
+      }, 1300); // slightly longer than the 1.2s duration
+
       return () => clearTimeout(timer);
     }
   }, [trigger, userPos, map]);
+
   return null;
 }
 
@@ -173,19 +92,33 @@ const INITIAL_LAYERS = {
 };
 
 function buildAttribution(layers) {
+  // Use a Set to store unique sources automatically
   const sources = new Set();
+
   if (layers.flood) {
     sources.add("Open-Meteo");
     sources.add("GloFAS");
   }
+
   if (layers.typhoon) {
     sources.add("PAGASA");
     sources.add("GDACS");
   }
+
   if (layers.landslide) {
     sources.add("Open-Meteo");
     sources.add("MGB");
   }
+
+  if (layers.earthquake) {
+    sources.add("USGS");
+  }
+
+  if (layers.reports) {
+    sources.add("Community Reports");
+  }
+
+  // Convert Set back to array and join with dots
   return Array.from(sources).join(" · ");
 }
 
@@ -201,16 +134,29 @@ export default function HazardMapPage() {
     cachedAt: null,
   });
 
-  // ── NEW: live alert counts for the badge ──────────────────────────────────
-  const { counts: alertCounts } = useAlerts();
+  const [reportFilters, setReportFilters] = useState({ types: ["all"] });
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Add state for earthquake filters
+  const [earthquakeFilters, setEarthquakeFilters] = useState({
+    timeRange: "week",
+    minMagnitude: 2.5,
+    region: "philippines",
+    limit: 100,
+  });
+
+  const [earthquakeRefresh, setEarthquakeRefresh] = useState(0);
 
   const togglePopup = (name) =>
     setActivePopup((cur) => (cur === name ? null : name));
+
   const toggleLayer = (key) =>
     setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+
   const handleRecenter = () => {
     if (userPos) setFlyTrigger((n) => n + 1);
   };
+
   const handleOfflineChange = useCallback(({ isOffline, cachedAt }) => {
     setOfflineInfo((prev) => {
       if (prev.isOffline === isOffline && prev.cachedAt === cachedAt)
@@ -219,6 +165,7 @@ export default function HazardMapPage() {
     });
   }, []);
 
+  // Live clock
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -248,13 +195,15 @@ export default function HazardMapPage() {
     );
   };
 
+  // ── Dynamic button stack ──────────────────────────────────────────────────
   const buttonStack = useMemo(() => {
     const stack = ["basemap", "recenter"];
     if (layers.flood) stack.push("forecast");
     if (layers.typhoon) stack.push("typhoon");
     if (layers.landslide) stack.push("landslide");
+    if (layers.earthquake) stack.push("earthquake");
     return stack;
-  }, [layers.flood, layers.typhoon, layers.landslide]);
+  }, [layers.flood, layers.typhoon, layers.landslide, layers.earthquake]);
 
   const btnStyle = useCallback(
     (key) => {
@@ -265,45 +214,19 @@ export default function HazardMapPage() {
     [buttonStack],
   );
 
+  // Dynamic attribution string based on active layers
   const attribution = useMemo(() => buildAttribution(layers), [layers]);
-
-  // Badge helpers
-  const hasCritical =
-    (alertCounts?.evacuate ?? 0) + (alertCounts?.critical ?? 0) > 0;
-  const hasWarning = alertCounts?.warning > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Title bar with alert badge ── */}
+      {/* Title bar */}
       <div className="mb-4 flex items-center justify-between flex-shrink-0">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
-
-            {/* ── NEW: Alert badge ── */}
-            {alertCounts?.total > 0 && (
-              <span
-                className={`text-xs font-bold px-2.5 py-1 rounded-full
-                             flex items-center gap-1.5
-                             ${
-                               hasCritical
-                                 ? "bg-red-600 text-white animate-pulse"
-                                 : hasWarning
-                                   ? "bg-amber-100 text-amber-700"
-                                   : "bg-blue-50 text-blue-700"
-                             }`}
-              >
-                <Bell size={11} />
-                {alertCounts.total} alert{alertCounts.total !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-
+          <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {CITY_NAME} — Disaster Preparedness Viewer
           </p>
         </div>
-
         <div className="flex items-center gap-2">
           {offlineInfo.isOffline ? (
             <>
@@ -326,11 +249,12 @@ export default function HazardMapPage() {
         </div>
       </div>
 
-      {/* ── Map wrapper ── */}
+      {/* Map wrapper */}
       <div
         className="relative flex-1 rounded-2xl overflow-hidden
                       border border-gray-200 shadow-lg min-h-[500px]"
       >
+        {/* Loading overlay */}
         {loading && (
           <div className="absolute inset-0 z-[2000] bg-white flex flex-col items-center justify-center gap-3">
             <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -340,6 +264,7 @@ export default function HazardMapPage() {
           </div>
         )}
 
+        {/* ── Leaflet map ── */}
         <BaseMap tileVariant={basemap} center={CITY_CENTER} zoom={CITY_ZOOM}>
           <FloodHazardLayer key="flood-haz" visible={layers.flood} />
           <TyphoonLayer key="typhoon" visible={layers.typhoon} />
@@ -348,12 +273,23 @@ export default function HazardMapPage() {
             visible={layers.landslide}
           />
           <LandslideLayer key="landslide" visible={layers.landslide} />
+          <ReportsLayer visible={layers.reports} filters={reportFilters} />
+
+          {/* Earthquake Layer */}
+          <EarthquakeLayer
+            visible={layers.earthquake}
+            filters={earthquakeFilters}
+            refreshTrigger={earthquakeRefresh}
+          />
           <UserLocationMarker onLocated={setUserPos} />
           <FlyToUser trigger={flyTrigger} userPos={userPos} />
           <MapStatusBar />
           <MapReadyHandler onReady={() => setLoading(false)} />
         </BaseMap>
 
+        {/* ── Floating UI ── */}
+
+        {/* Offline banner */}
         {offlineInfo.isOffline && (
           <OfflineBanner
             cachedAt={offlineInfo.cachedAt}
@@ -361,7 +297,7 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* City badge */}
+        {/* City badge — top right — attribution updates with active layers */}
         <div
           className="absolute top-4 right-4 z-[1000]
                         bg-white/90 backdrop-blur border border-gray-200
@@ -380,6 +316,8 @@ export default function HazardMapPage() {
         </div>
 
         {/* ── LEFT BUTTON STACK ── */}
+
+        {/* 1. Basemap picker — always visible */}
         <button
           onClick={() => togglePopup("basemap")}
           title="Change basemap"
@@ -397,6 +335,7 @@ export default function HazardMapPage() {
           />
         </button>
 
+        {/* 2. Recenter — always visible, disabled until location found */}
         <button
           onClick={handleRecenter}
           title="Go to my location"
@@ -412,6 +351,7 @@ export default function HazardMapPage() {
           />
         </button>
 
+        {/* 3. Flood forecast */}
         {layers.flood && (
           <FloodForecastPanel
             visible={layers.flood}
@@ -422,6 +362,7 @@ export default function HazardMapPage() {
           />
         )}
 
+        {/* 4. Typhoon tracker */}
         {layers.typhoon && (
           <TyphoonPanel
             visible={layers.typhoon}
@@ -432,6 +373,7 @@ export default function HazardMapPage() {
           />
         )}
 
+        {/* 5. Landslide forecast */}
         {layers.landslide && (
           <LandslideForecastPanel
             visible={layers.landslide}
@@ -442,6 +384,17 @@ export default function HazardMapPage() {
           />
         )}
 
+        {layers.earthquake && (
+          <EarthquakePanel
+            visible={layers.earthquake}
+            isOpen={activePopup === "earthquake"}
+            onToggle={() => togglePopup("earthquake")}
+            onFilterChange={setEarthquakeFilters}
+            onRefresh={() => setEarthquakeRefresh((prev) => prev + 1)}
+          />
+        )}
+
+        {/* Basemap picker popup */}
         {activePopup === "basemap" && (
           <BasemapPicker
             active={basemap}
@@ -453,7 +406,19 @@ export default function HazardMapPage() {
           />
         )}
 
+        {/* Report Filter - shown when reports layer is active */}
+        {layers.reports && (
+          <ReportFilter
+            isOpen={filterOpen}
+            onToggle={() => setFilterOpen(!filterOpen)}
+            onFilterChange={setReportFilters}
+          />
+        )}
+
+        {/* Layer control panel — top right */}
         <LayerControlPanel layers={layers} onToggleLayer={toggleLayer} />
+
+        {/* Hazard legend — bottom left */}
         <HazardLegend activeLayers={layers} />
       </div>
     </div>

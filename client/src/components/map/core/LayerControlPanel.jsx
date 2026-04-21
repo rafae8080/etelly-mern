@@ -29,7 +29,6 @@ const LAYERS = [
     Icon: CircleDot,
     activeColor: "bg-red-500",
     ring: "ring-red-400",
-    disabled: true,
   },
 
   {
@@ -38,7 +37,6 @@ const LAYERS = [
     Icon: MapPin,
     activeColor: "bg-purple-500",
     ring: "ring-purple-400",
-    disabled: true,
   },
 ];
 
