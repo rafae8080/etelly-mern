@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "./layouts/AdminLayout";
 
 import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import AlertsPage from "./pages/AlertsPage";
 import HazardMapPage from "./pages/HazardMapPage";
@@ -49,6 +51,11 @@ function ProtectedRoute({ children }) {
   return isTokenValid() ? children : <Navigate to="/login" replace />;
 }
 
+// Auth required but no AdminLayout — used for /change-password
+function AuthOnlyRoute({ Page }) {
+  return isTokenValid() ? <Page /> : <Navigate to="/login" replace />;
+}
+
 // ── Layout wrapper (moved outside App to prevent remounts on re-render) ───────
 function ProtectedLayout({ Page }) {
   const userEmail = localStorage.getItem("user")
@@ -85,6 +92,13 @@ export default function App() {
               <LoginPage />
             </PublicRoute>
           }
+        />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+        {/* Auth required, no sidebar layout */}
+        <Route
+          path="/change-password"
+          element={<AuthOnlyRoute Page={ChangePasswordPage} />}
         />
 
         {/* Protected pages */}

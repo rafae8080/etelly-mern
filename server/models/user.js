@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "user", "barangay_official"],
       default: "user",
     },
+    mustChangePassword: { type: Boolean, default: false },
+    contactEmail: { type: String, default: "" },
   },
   { timestamps: true },
 );

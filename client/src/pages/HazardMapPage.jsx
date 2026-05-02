@@ -13,6 +13,7 @@ import FloodLayer, {
 } from "../components/map/flood/FloodLayer";
 import FloodHazardLayer from "../components/map/flood/FloodHazardLayer";
 import FloodForecastPanel from "../components/map/flood/FloodForecastPanel";
+import FloodAlertsLayer from "../components/map/flood/FloodAlertsLayer";
 
 // typhoon
 import TyphoonLayer, {
@@ -21,17 +22,21 @@ import TyphoonLayer, {
 
 //landslide
 import LandslideForecastPanel from "../components/map/landslide/LandslideForecastPanel";
+import LandslideAlertsLayer from "../components/map/landslide/LandslideAlertsLayer";
 import LandslideLayer, {
   LandslideHazardLayer,
 } from "../components/map/landslide/LandslideLayer";
 
-//eartquake
+//earthquake
 import EarthquakeLayer from "../components/map/earthquake/EarthquakeLayer";
 import EarthquakePanel from "../components/map/earthquake/EarthquakePanel";
 
 //reports
 import ReportsLayer from "../components/map/reports/ReportsLayer";
 import ReportFilter from "../components/map/ui/ReportFilter";
+
+// evacuation
+import EvacuationCentersLayer from "../components/map/evacuation/EvacuationCentersLayer";
 
 // ui
 import HazardLegend from "../components/map/ui/HazardLegend";
@@ -67,13 +72,11 @@ function FlyToUser({ trigger, userPos }) {
     if (userPos) {
       map.flyTo(userPos, 17, { duration: 1.2 });
 
-      // Force Leaflet to refresh tiles/vectors after the flight begins
-      // and again once it finishes to ensure nothing "disappears"
       map.invalidateSize();
 
       const timer = setTimeout(() => {
         map.invalidateSize();
-      }, 1300); // slightly longer than the 1.2s duration
+      }, 1300);
 
       return () => clearTimeout(timer);
     }
@@ -89,15 +92,15 @@ const INITIAL_LAYERS = {
   fire: false,
   landslide: false,
   reports: false,
+  evacuation: false,
 };
 
 function buildAttribution(layers) {
-  // Use a Set to store unique sources automatically
   const sources = new Set();
 
   if (layers.flood) {
     sources.add("Open-Meteo");
-    sources.add("GloFAS");
+    sources.add("Phil-LiDAR");
   }
 
   if (layers.typhoon) {
@@ -118,7 +121,6 @@ function buildAttribution(layers) {
     sources.add("Community Reports");
   }
 
-  // Convert Set back to array and join with dots
   return Array.from(sources).join(" · ");
 }
 
@@ -137,7 +139,6 @@ export default function HazardMapPage() {
   const [reportFilters, setReportFilters] = useState({ types: ["all"] });
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // Add state for earthquake filters
   const [earthquakeFilters, setEarthquakeFilters] = useState({
     timeRange: "week",
     minMagnitude: 2.5,
@@ -165,7 +166,6 @@ export default function HazardMapPage() {
     });
   }, []);
 
-  // Live clock
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -195,7 +195,6 @@ export default function HazardMapPage() {
     );
   };
 
-  // ── Dynamic button stack ──────────────────────────────────────────────────
   const buttonStack = useMemo(() => {
     const stack = ["basemap", "recenter"];
     if (layers.flood) stack.push("forecast");
@@ -214,7 +213,6 @@ export default function HazardMapPage() {
     [buttonStack],
   );
 
-  // Dynamic attribution string based on active layers
   const attribution = useMemo(() => buildAttribution(layers), [layers]);
 
   return (
@@ -251,7 +249,7 @@ export default function HazardMapPage() {
 
       {/* Map wrapper */}
       <div
-        className="relative flex-1 rounded-2xl overflow-hidden
+        className="relative flex-1 rounded-2xl overflow-hidden isolate
                       border border-gray-200 shadow-lg min-h-[500px]"
       >
         {/* Loading overlay */}
@@ -267,20 +265,27 @@ export default function HazardMapPage() {
         {/* ── Leaflet map ── */}
         <BaseMap tileVariant={basemap} center={CITY_CENTER} zoom={CITY_ZOOM}>
           <FloodHazardLayer key="flood-haz" visible={layers.flood} />
+
+          {/* Flood alert markers — shows active system alerts as wave icons.
+              Rendered when flood layer is on so CDRRMO sees both the
+              susceptibility zones AND live alert locations together. */}
+          <FloodAlertsLayer visible={layers.flood} />
+
           <TyphoonLayer key="typhoon" visible={layers.typhoon} />
           <LandslideHazardLayer
             key="landslide-haz"
             visible={layers.landslide}
           />
+          <LandslideAlertsLayer visible={layers.landslide} />
           <LandslideLayer key="landslide" visible={layers.landslide} />
           <ReportsLayer visible={layers.reports} filters={reportFilters} />
 
-          {/* Earthquake Layer */}
           <EarthquakeLayer
             visible={layers.earthquake}
             filters={earthquakeFilters}
             refreshTrigger={earthquakeRefresh}
           />
+          <EvacuationCentersLayer visible={layers.evacuation} />
           <UserLocationMarker onLocated={setUserPos} />
           <FlyToUser trigger={flyTrigger} userPos={userPos} />
           <MapStatusBar />
@@ -289,7 +294,6 @@ export default function HazardMapPage() {
 
         {/* ── Floating UI ── */}
 
-        {/* Offline banner */}
         {offlineInfo.isOffline && (
           <OfflineBanner
             cachedAt={offlineInfo.cachedAt}
@@ -297,7 +301,6 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* City badge — top right — attribution updates with active layers */}
         <div
           className="absolute top-4 right-4 z-[1000]
                         bg-white/90 backdrop-blur border border-gray-200
@@ -335,7 +338,7 @@ export default function HazardMapPage() {
           />
         </button>
 
-        {/* 2. Recenter — always visible, disabled until location found */}
+        {/* 2. Recenter — always visible */}
         <button
           onClick={handleRecenter}
           title="Go to my location"
@@ -351,7 +354,7 @@ export default function HazardMapPage() {
           />
         </button>
 
-        {/* 3. Flood forecast */}
+        {/* 3. Flood conditions panel */}
         {layers.flood && (
           <FloodForecastPanel
             visible={layers.flood}
@@ -394,7 +397,6 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* Basemap picker popup */}
         {activePopup === "basemap" && (
           <BasemapPicker
             active={basemap}
@@ -406,7 +408,6 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* Report Filter - shown when reports layer is active */}
         {layers.reports && (
           <ReportFilter
             isOpen={filterOpen}
@@ -415,10 +416,8 @@ export default function HazardMapPage() {
           />
         )}
 
-        {/* Layer control panel — top right */}
         <LayerControlPanel layers={layers} onToggleLayer={toggleLayer} />
 
-        {/* Hazard legend — bottom left */}
         <HazardLegend activeLayers={layers} />
       </div>
     </div>

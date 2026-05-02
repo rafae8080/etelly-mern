@@ -157,6 +157,7 @@ export function useAlerts() {
       try {
         await fetch(`${API_BASE}/api/alerts/${alertId}/dismiss`, {
           method: "PATCH",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
         });
       } catch {
         // If it fails, refetch to restore correct state

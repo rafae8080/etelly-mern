@@ -1,26 +1,58 @@
-import { useEffect, useState } from "react";
-import { Waves, X, MapPin, TriangleAlert, Siren, WifiOff } from "lucide-react";
-import { useOfflineCache } from "../../../hooks/useOfflineCache";
+// client/src/components/map/flood/FloodForecastPanel.dev.jsx
+// DEV MODE ONLY — swap import in HazardMapPage.jsx to test locally.
 
-const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+import { Waves, X, MapPin, TriangleAlert, Siren } from "lucide-react";
 
-// ── Elevation table — lower elevation = floods first ─────────────────────────
-const ELEVATION_MAP = {
-  "San Roque": 6,
-  "Munting Dilaw": 7,
-  "Bagong Nayon": 8,
-  "Dela Paz": 9,
-  "San Jose": 10,
-  Mambugan: 11,
-  "Beverly Hills": 12,
-  Mayamot: 14,
-  "San Luis": 18,
-  Calawis: 22,
-};
+// ── Fake barangay alerts ──────────────────────────────────────────────────────
+// Set to [] to see the empty state.
+const DEV_BARANGAY_ALERTS = [
+  {
+    name: "San Roque",
+    severity: "evacuate",
+    elevation: 6,
+    reason:
+      "All 3 factors active: heavy rain 4+ hrs, lowest elevation (6m), soil at 72% saturation.",
+  },
+  {
+    name: "Munting Dilaw",
+    severity: "warning",
+    elevation: 7,
+    reason:
+      "Heavy rain ongoing + low elevation (7m). Prepare evacuation teams now.",
+  },
+  {
+    name: "Bagong Nayon",
+    severity: "warning",
+    elevation: 8,
+    reason: "Heavy rain ongoing + low elevation (8m). Notify barangay captain.",
+  },
+  {
+    name: "Dela Paz",
+    severity: "watch",
+    elevation: 9,
+    reason:
+      "Low elevation + saturated soil. Monitor closely — no heavy rain yet.",
+  },
+  {
+    name: "Mayamot",
+    severity: "watch",
+    elevation: 14,
+    reason:
+      "Heavy rain forecast next 3 hrs. Elevation is 14m but soil near threshold.",
+  },
+];
 
 const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
 
-// ── Header / button styles keyed by overall severity ─────────────────────────
+function getOverallSeverity(list) {
+  if (!list.length) return "normal";
+  return list.reduce((worst, b) =>
+    (SEVERITY_ORDER[b.severity] ?? 99) < (SEVERITY_ORDER[worst.severity] ?? 99)
+      ? b
+      : worst,
+  ).severity;
+}
+
 const HEADER_STYLE = {
   normal: {
     bg: "bg-white",
@@ -47,7 +79,7 @@ const HEADER_STYLE = {
     border: "border-amber-300",
     text: "text-amber-700",
     label: "Flood Warning",
-    sub: "Open-Meteo forecast · Phil-LiDAR elevation  ",
+    sub: "Open-Meteo forecast · Phil-LiDAR elevation",
     icon: <TriangleAlert className="w-4 h-4 text-amber-500" />,
     btn: "bg-amber-50 border-amber-400",
     wave: "text-amber-500",
@@ -74,7 +106,6 @@ const HEADER_STYLE = {
   },
 };
 
-// ── Barangay row badge styles ─────────────────────────────────────────────────
 const SEVERITY_BADGE = {
   evacuate: {
     bg: "bg-red-600",
@@ -122,58 +153,6 @@ const SEVERITY_BADGE = {
   },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function getOverallSeverity(list) {
-  if (!list.length) return "normal";
-  return list.reduce((worst, b) =>
-    (SEVERITY_ORDER[b.severity] ?? 99) < (SEVERITY_ORDER[worst.severity] ?? 99)
-      ? b
-      : worst,
-  ).severity;
-}
-
-function buildBarangayList(alerts) {
-  const map = {};
-  for (const alert of alerts) {
-    const { severity, barangays = [], description = "" } = alert;
-    const sevOrder = SEVERITY_ORDER[severity] ?? 99;
-    const firstSentence = description.split(".")[0]?.trim() ?? "";
-    const reason =
-      firstSentence.length > 90
-        ? firstSentence.slice(0, 87) + "…"
-        : firstSentence;
-
-    for (const brgy of barangays) {
-      const existing = map[brgy];
-      if (!existing || sevOrder < (SEVERITY_ORDER[existing.severity] ?? 99)) {
-        map[brgy] = { severity, reason };
-      }
-    }
-  }
-
-  return Object.entries(map)
-    .map(([name, { severity, reason }]) => ({
-      name,
-      severity,
-      reason,
-      elevation: ELEVATION_MAP[name] ?? 99,
-    }))
-    .sort((a, b) => {
-      const sevDiff =
-        (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
-      return sevDiff !== 0 ? sevDiff : a.elevation - b.elevation;
-    });
-}
-
-const timeAgo = (ts) => {
-  if (!ts) return "";
-  const mins = Math.floor((Date.now() - ts) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  return `${Math.floor(mins / 60)}h ago`;
-};
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 const BarangayRow = ({ name, severity, elevation, reason }) => {
   const s = SEVERITY_BADGE[severity] ?? SEVERITY_BADGE.watch;
   return (
@@ -207,90 +186,37 @@ const BarangayRow = ({ name, severity, elevation, reason }) => {
   );
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
 const FloodForecastPanel = ({
   visible,
   isOpen,
   onToggle,
   topStyle = null,
   topPosition = "top-[170px]",
-  onOfflineChange,
 }) => {
-  // useOfflineCache keeps the forecast generatedAt timestamp for the footer
-  const {
-    data: forecastData,
-    isOffline,
-    cachedAt,
-  } = useOfflineCache(
-    "flood-forecast",
-    () => fetch("/api/hazard/flood-forecast").then((r) => r.json()),
-    10 * 60 * 1000,
-  );
-
-  const [alertList, setAlertList] = useState([]);
-  const [alertsLoading, setAlertsLoading] = useState(false);
-
-  useEffect(() => {
-    if (typeof onOfflineChange === "function") {
-      onOfflineChange({ isOffline, cachedAt });
-    }
-  }, [isOffline, cachedAt, onOfflineChange]);
-
-  // Fetch active flood alerts and rebuild the barangay list every 2 min
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-
-    const load = async () => {
-      setAlertsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/alerts`);
-        if (!res.ok) throw new Error("fetch failed");
-        const { alerts = [] } = await res.json();
-        const floodAlerts = alerts.filter(
-          (a) => a.type === "flood" && a.isActive,
-        );
-        if (!cancelled) setAlertList(buildBarangayList(floodAlerts));
-      } catch (_) {
-        // silent — show whatever was cached
-      } finally {
-        if (!cancelled) setAlertsLoading(false);
-      }
-    };
-
-    load();
-    const interval = setInterval(load, 2 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isOpen]);
-
   if (!visible) return null;
 
-  const overallSev = getOverallSeverity(alertList);
+  const alerts = DEV_BARANGAY_ALERTS;
+  const overallSev = getOverallSeverity(alerts);
   const h = HEADER_STYLE[overallSev] ?? HEADER_STYLE.normal;
-  const hasAlerts = alertList.length > 0;
-
-  const updatedAt = forecastData?.generatedAt
-    ? new Date(forecastData.generatedAt).toLocaleTimeString("en-PH", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
+  const hasAlerts = alerts.length > 0;
 
   return (
     <>
       {/* Toggle button */}
       <button
         onClick={onToggle}
-        title="Flood Risk Monitor"
+        title="Flood Risk Monitor [DEV]"
         style={topStyle ?? undefined}
         className={`absolute ${topStyle ? "" : topPosition} left-[10px] z-[1000]
                     w-[30px] h-[30px] border flex items-center justify-center
                     shadow-sm hover:brightness-95 transition-all ${h.btn}
                     ${isOpen ? "ring-1 ring-offset-1 ring-current" : ""}`}
       >
+        {/* Small yellow dot — only indicator of dev mode, no floating badge */}
+        <span
+          className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 border border-white"
+          title="Dev mode"
+        />
         <Waves size={15} strokeWidth={1.8} className={h.wave} />
       </button>
 
@@ -300,7 +226,7 @@ const FloodForecastPanel = ({
           className={`absolute top-[90px] left-[50px] z-[1050] bg-white border rounded-2xl shadow-xl flex flex-col ${h.border}`}
           style={{ width: "272px", maxHeight: "calc(100vh - 120px)" }}
         >
-          {/* Header — fixed */}
+          {/* Header — fixed, never scrolls */}
           <div
             className={`flex items-center justify-between px-4 py-3 ${h.bg} border-b ${h.border} flex-shrink-0 rounded-t-2xl`}
           >
@@ -309,22 +235,11 @@ const FloodForecastPanel = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <p className={`text-xs font-bold ${h.text}`}>{h.label}</p>
-                  {isOffline && (
-                    <WifiOff
-                      size={10}
-                      className="text-amber-500"
-                      title={`Cached ${timeAgo(cachedAt)}`}
-                    />
-                  )}
+                  <span className="text-[8px] bg-yellow-100 text-yellow-700 font-bold px-1.5 py-0.5 rounded">
+                    DEV
+                  </span>
                 </div>
-                <p className="text-[10px] text-gray-400">
-                  {h.sub}
-                  {isOffline && cachedAt && (
-                    <span className="text-amber-500 ml-1">
-                      · cached {timeAgo(cachedAt)}
-                    </span>
-                  )}
-                </p>
+                <p className="text-[10px] text-gray-400">{h.sub}</p>
               </div>
             </div>
             <button
@@ -337,12 +252,7 @@ const FloodForecastPanel = ({
 
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 mb-10">
-            {alertsLoading && !hasAlerts ? (
-              <div className="py-6 flex items-center justify-center gap-2">
-                <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Checking alerts…</span>
-              </div>
-            ) : hasAlerts ? (
+            {hasAlerts ? (
               <>
                 <div className="flex items-center gap-1.5">
                   <MapPin size={10} className="text-gray-400 flex-shrink-0" />
@@ -350,12 +260,12 @@ const FloodForecastPanel = ({
                     Affected Barangays
                   </p>
                   <span className="ml-auto text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded-full">
-                    {alertList.length}
+                    {alerts.length}
                   </span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  {alertList.map((b) => (
+                  {alerts.map((b) => (
                     <BarangayRow
                       key={b.name}
                       name={b.name}
@@ -384,16 +294,13 @@ const FloodForecastPanel = ({
             )}
           </div>
 
-          {/* Footer — fixed at bottom */}
+          {/* Footer — fixed at bottom, never scrolls */}
           <div className="flex-shrink-0 border-t border-gray-100 px-4 py-2.5 flex flex-col gap-0.5 rounded-b-2xl">
             <p className="text-[9px] text-gray-400 font-medium">
-              System flood prediction
+              🌧 Open-Meteo forecast · Phil-LiDAR elevation
             </p>
             <p className="text-[9px] text-gray-300 leading-tight">
-              updated every 15 min
-              {updatedAt && !isOffline && (
-                <span className="ml-1">· last run {updatedAt}</span>
-              )}
+              System flood prediction · updated every 15 min
             </p>
           </div>
         </div>

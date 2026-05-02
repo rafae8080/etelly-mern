@@ -1,32 +1,21 @@
 // models/Alert.js
 import mongoose from "mongoose";
 
+const actionLogSchema = new mongoose.Schema({
+  action: { type: String, enum: ["created", "dismissed"] },
+  by:     { type: String, required: true },
+  at:     { type: Date, default: Date.now },
+});
+
 const AlertSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: [
-      "system",
-      "PAGASA",
-      "PHIVOLCS",
-      "NDRRMC",
-      "OCD",
-      "GDACS",
-      "USGS",
-      "CDRRMO",
-    ],
+    enum: ["system", "residents", "CDRRMO"],
     required: true,
   },
   type: {
     type: String,
-    enum: [
-      "flood",
-      "river",
-      "rainfall",
-      "earthquake",
-      "lahar",
-      "typhoon",
-      "other",
-    ],
+    enum: ["flood", "rainfall", "earthquake", "lahar", "typhoon", "other"],
     required: true,
   },
   severity: {
@@ -40,6 +29,7 @@ const AlertSchema = new mongoose.Schema({
   barangays: [String],
   raw: String,
   isActive: { type: Boolean, default: true },
+  actionLog: [actionLogSchema],
   _dedupeKey: { type: String, index: true },
   rawKey: { type: String, index: true },
   createdAt: { type: Date, default: Date.now },

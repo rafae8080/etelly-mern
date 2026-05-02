@@ -1,286 +1,323 @@
-import { useEffect } from "react";
-import { Mountain, Droplets, X, WifiOff } from "lucide-react";
-import { useOfflineCache } from "../../../hooks/useOfflineCache";
+import { useEffect, useState } from "react";
+import { Mountain, MapPin, TriangleAlert, Siren, X } from "lucide-react";
+import RainfallStrip from "../flood/RainfallStrip";
 
-// ── Dev test mode ─────────────────────────────────────────────────────────
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
 const IS_DEV_MODE =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("dev") === "true";
 
-// Fake data for dev mode
-const DEV_FAKE_DATA = {
-  overallRisk: { label: "Warning", level: 2, color: "#f97316" },
-  generatedAt: new Date().toISOString(),
-  current: {
-    rainfall24h: 38.5,
-    rainfall72h: 82.3,
-    soilMoisture: 0.372,
-    soilSaturated: true,
+// Fake alerts for dev mode — first sentence of description becomes the zone row reason
+const DEV_FAKE_ZONE_ALERTS = [
+  {
+    type: "landslide",
+    isActive: true,
+    severity: "warning",
+    description:
+      "Landslide risk elevated — intense rain has fallen continuously for 3h (≥30 mm/hr), soil saturation at 78%. " +
+      "Prepare for possible evacuation near steep slopes. " +
+      "Prior 24h: 42 mm, 72h: 88 mm. Source: Open-Meteo forecast, MGB susceptibility data. " +
+      "Affected: Brgy. Calawis, Antipolo, Brgy. Mambugan (ridge), Brgy. Dalig (upper slope).",
+    barangays: [
+      "Brgy. Calawis, Antipolo",
+      "Brgy. Mambugan (ridge)",
+      "Brgy. Dalig (upper slope)",
+    ],
   },
-  zones: [
-    {
-      lat: 14.622,
-      lng: 121.198,
-      risk: 3,
-      name: "Brgy. Dalig (upper slope)",
-      riskAssessment: { label: "Warning", level: 2, color: "#f97316" },
-    },
-    {
-      lat: 14.631,
-      lng: 121.205,
-      risk: 3,
-      name: "Brgy. Calawis, Antipolo",
-      riskAssessment: { label: "Warning", level: 2, color: "#f97316" },
-    },
-    {
-      lat: 14.583,
-      lng: 121.172,
-      risk: 3,
-      name: "Hinulugang Taktak escarpment",
-      riskAssessment: { label: "Watch", level: 1, color: "#f59e0b" },
-    },
-    {
-      lat: 14.598,
-      lng: 121.175,
-      risk: 2,
-      name: "Brgy. Inarawan (slope)",
-      riskAssessment: { label: "Watch", level: 1, color: "#f59e0b" },
-    },
-  ],
-  forecast: {
-    dates: Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      return d.toISOString().slice(0, 10);
-    }),
-    precipitation_sum: [38.5, 55.2, 21.0, 8.5, 3.0, 1.2, 0.5],
-    precipitation_probability_max: [85, 90, 65, 40, 20, 10, 5],
+  {
+    type: "landslide",
+    isActive: true,
+    severity: "watch",
+    description:
+      "Landslide conditions possible — 35 mm of recent rain has raised soil moisture to 68%. " +
+      "Residents near slopes should stay alert and monitor for instability. " +
+      "Prior 24h: 35 mm, 72h: 71 mm. Source: Open-Meteo forecast, MGB susceptibility data.",
+    barangays: [
+      "Brgy. Inarawan (slope)",
+      "Brgy. San Jose (hillside)",
+      "Hinulugang Taktak escarpment",
+    ],
   },
+];
+
+// Slope risk per zone name — used for sort order (higher = steeper = more dangerous)
+const SLOPE_MAP = {
+  "Brgy. Dalig (upper slope)": 3,
+  "Brgy. Calawis, Antipolo": 3,
+  "Brgy. San Jose (hillside)": 3,
+  "Brgy. Mambugan (ridge)": 3,
+  "Hinulugang Taktak escarpment": 3,
+  "Brgy. Inarawan (slope)": 2,
+  "Brgy. Dela Paz (hillside)": 2,
+  "Brgy. San Roque (mid-slope)": 2,
+  "Brgy. Cupang (elevated)": 2,
+  "Brgy. San Isidro (steep slope)": 2,
 };
 
-const ALERT_CONFIG = {
-  Low: {
-    bg: "bg-green-50",
-    border: "border-green-200",
-    text: "text-green-700",
-    label: "Low Risk",
-    icon: "🟢",
-    buttonBg: "bg-white",
-    buttonBorder: "border-gray-300",
-    iconColor: "text-green-500",
+const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
+
+const HEADER_STYLE = {
+  normal: {
+    bg: "bg-white",
+    border: "border-gray-200",
+    text: "text-gray-600",
+    label: "Landslide Monitor",
+    sub: "Open-Meteo · MGB susceptibility zones",
+    icon: <Mountain className="w-4 h-4 text-amber-400" />,
+    btn: "bg-white border-gray-300",
+    iconColor: "text-amber-400",
   },
-  Watch: {
+  watch: {
     bg: "bg-yellow-50",
     border: "border-yellow-300",
     text: "text-yellow-700",
-    label: "Watch — Monitor",
-    icon: "🟡",
-    buttonBg: "bg-yellow-50",
-    buttonBorder: "border-yellow-400",
+    label: "Landslide Watch",
+    sub: "Open-Meteo · MGB susceptibility zones",
+    icon: <Mountain className="w-4 h-4 text-yellow-500" />,
+    btn: "bg-yellow-50 border-yellow-300",
     iconColor: "text-yellow-500",
   },
-  Warning: {
+  warning: {
     bg: "bg-amber-50",
     border: "border-amber-300",
     text: "text-amber-700",
-    label: "Warning — Elevated",
-    icon: "⚠️",
-    buttonBg: "bg-amber-50",
-    buttonBorder: "border-amber-400",
+    label: "Landslide Warning",
+    sub: "Open-Meteo · MGB susceptibility zones",
+    icon: <TriangleAlert className="w-4 h-4 text-amber-500" />,
+    btn: "bg-amber-50 border-amber-400",
     iconColor: "text-amber-500",
   },
-  Critical: {
+  critical: {
     bg: "bg-red-50",
     border: "border-red-400",
     text: "text-red-700",
-    label: "Critical — High Risk",
-    icon: "🚨",
-    buttonBg: "bg-red-50",
-    buttonBorder: "border-red-400",
+    label: "High Landslide Risk",
+    sub: "Open-Meteo · MGB susceptibility zones",
+    icon: <Siren className="w-4 h-4 text-red-500" />,
+    btn: "bg-red-50 border-red-400",
     iconColor: "text-red-500",
+  },
+  evacuate: {
+    bg: "bg-red-100",
+    border: "border-red-500",
+    text: "text-red-800",
+    label: "EVACUATE",
+    sub: "Open-Meteo · MGB susceptibility zones",
+    icon: <Siren className="w-4 h-4 text-red-700" />,
+    btn: "bg-red-100 border-red-500",
+    iconColor: "text-red-600",
   },
 };
 
-const DEFAULT_ALERT = ALERT_CONFIG.Low;
+const SEVERITY_BADGE = {
+  evacuate: {
+    bg: "bg-red-600",
+    text: "text-white",
+    label: "EVACUATE",
+    dot: "bg-red-600",
+    cardBorder: "border-red-200",
+    cardBg: "bg-red-50",
+    nameCls: "text-red-800",
+    descCls: "text-red-500",
+    pulse: true,
+  },
+  critical: {
+    bg: "bg-red-100",
+    text: "text-red-800",
+    label: "CRITICAL",
+    dot: "bg-red-500",
+    cardBorder: "border-red-200",
+    cardBg: "bg-red-50",
+    nameCls: "text-red-800",
+    descCls: "text-red-500",
+    pulse: true,
+  },
+  warning: {
+    bg: "bg-amber-100",
+    text: "text-amber-800",
+    label: "WARNING",
+    dot: "bg-amber-500",
+    cardBorder: "border-amber-200",
+    cardBg: "bg-amber-50",
+    nameCls: "text-amber-800",
+    descCls: "text-amber-600",
+    pulse: false,
+  },
+  watch: {
+    bg: "bg-yellow-100",
+    text: "text-yellow-800",
+    label: "WATCH",
+    dot: "bg-yellow-500",
+    cardBorder: "border-yellow-200",
+    cardBg: "bg-yellow-50",
+    nameCls: "text-yellow-800",
+    descCls: "text-yellow-600",
+    pulse: false,
+  },
+};
 
-const SparkBar = ({ values, max }) => (
-  <div className="flex items-end gap-0.5 h-8">
-    {values.slice(0, 7).map((v, i) => {
-      const pct = max > 0 ? (v / max) * 100 : 0;
-      const color =
-        pct > 75 ? "bg-red-400" : pct > 45 ? "bg-amber-400" : "bg-blue-400";
-      return (
-        <div key={i} className="flex-1 flex flex-col justify-end">
-          <div
-            className={`${color} rounded-sm min-h-[2px]`}
-            style={{ height: `${Math.max(pct, 4)}%` }}
-            title={`Day ${i + 1}: ${v.toFixed(1)} mm`}
-          />
-        </div>
-      );
-    })}
-  </div>
-);
+function getOverallSeverity(list) {
+  if (!list.length) return "normal";
+  return list.reduce((worst, b) =>
+    (SEVERITY_ORDER[b.severity] ?? 99) < (SEVERITY_ORDER[worst.severity] ?? 99)
+      ? b
+      : worst,
+  ).severity;
+}
 
-const SoilMoistureBar = ({ value, threshold = 0.35 }) => {
-  const pct = Math.min((value / 0.5) * 100, 100);
-  const saturated = value >= threshold;
+function buildZoneList(alerts) {
+  const map = {};
+  for (const alert of alerts) {
+    const { severity, barangays = [], description = "" } = alert;
+    const sevOrder = SEVERITY_ORDER[severity] ?? 99;
+    const firstSentence = description.split(".")[0]?.trim() ?? "";
+    const reason =
+      firstSentence.length > 100
+        ? firstSentence.slice(0, 97) + "…"
+        : firstSentence;
+    for (const zone of barangays) {
+      const existing = map[zone];
+      if (!existing || sevOrder < (SEVERITY_ORDER[existing.severity] ?? 99)) {
+        map[zone] = { severity, reason };
+      }
+    }
+  }
+  return Object.entries(map)
+    .map(([name, { severity, reason }]) => ({
+      name,
+      severity,
+      reason,
+      slopeRisk: SLOPE_MAP[name] ?? 1,
+    }))
+    .sort((a, b) => {
+      const sevDiff =
+        (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
+      return sevDiff !== 0 ? sevDiff : b.slopeRisk - a.slopeRisk;
+    });
+}
+
+const ZoneRow = ({ name, severity, slopeRisk, reason }) => {
+  const s = SEVERITY_BADGE[severity] ?? SEVERITY_BADGE.watch;
+  const riskLabel =
+    slopeRisk === 3 ? "Steep" : slopeRisk === 2 ? "Mod." : "Low";
   return (
-    <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all ${
-          saturated ? "bg-red-400" : pct > 55 ? "bg-amber-400" : "bg-blue-400"
-        }`}
-        style={{ width: `${pct}%` }}
-      />
+    <div
+      className={`rounded-xl border px-3 py-2.5 ${s.cardBg} ${s.cardBorder}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot} ${
+              s.pulse ? "animate-pulse" : ""
+            }`}
+          />
+          <span className={`text-[11px] font-bold truncate ${s.nameCls}`}>
+            {name}
+          </span>
+          <span className="text-[9px] text-gray-400 flex-shrink-0">
+            {riskLabel}
+          </span>
+        </div>
+        <span
+          className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${s.bg} ${s.text}`}
+        >
+          {s.label}
+        </span>
+      </div>
+      {reason && (
+        <p className={`text-[9px] leading-snug mt-1.5 ${s.descCls}`}>
+          {reason}
+        </p>
+      )}
     </div>
   );
 };
 
-const RISK_BADGE = {
-  Critical: "bg-red-100 text-red-700",
-  Warning: "bg-amber-100 text-amber-700",
-  Watch: "bg-yellow-100 text-yellow-700",
-  Low: "bg-green-100 text-green-700",
-};
+// ── Hooks always called unconditionally (Rules of Hooks) ─────────────────────
+const LandslideForecastPanelContent = ({ isOpen, onToggle, topStyle }) => {
+  const [zoneList, setZoneList] = useState([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
 
-const timeAgo = (ts) => {
-  if (!ts) return "";
-  const mins = Math.floor((Date.now() - ts) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  return `${Math.floor(mins / 60)}h ago`;
-};
-
-const fetchLandslide = async () => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    const res = await fetch("/api/hazard/landslide", {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    return await res.json();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.warn("Landslide API fetch failed:", error.message);
-    throw error;
-  }
-};
-
-// ── FIX: hooks are ALWAYS called — no conditional hook calls ──────────────
-const LandslideForecastPanelContent = ({
-  visible,
-  isOpen,
-  onToggle,
-  topStyle,
-  onOfflineChange,
-}) => {
-  // Always call the hook unconditionally — satisfies Rules of Hooks.
-  // In dev mode we still call it but ignore its return value.
-  const cacheResult = useOfflineCache(
-    "landslide-forecast",
-    fetchLandslide,
-    10 * 60 * 1000,
-  );
-
-  // Pick data source: dev fake data OR real cache result
-  const data = IS_DEV_MODE ? DEV_FAKE_DATA : cacheResult.data;
-  const loading = IS_DEV_MODE ? false : cacheResult.loading;
-  const isOffline = IS_DEV_MODE ? false : cacheResult.isOffline;
-  const cachedAt = IS_DEV_MODE ? null : cacheResult.cachedAt;
-  const error = IS_DEV_MODE ? null : cacheResult.error;
-
-  // FIX: notify parent via useEffect, not inline during render
+  // Fetch active landslide alerts; refresh every 2 min while panel is open
   useEffect(() => {
-    if (IS_DEV_MODE) return;
-    if (typeof onOfflineChange === "function") {
-      onOfflineChange({ isOffline, cachedAt });
-    }
-  }, [isOffline, cachedAt, onOfflineChange]);
+    if (!isOpen) return;
+    let cancelled = false;
 
-  const alertKey = data?.overallRisk?.label ?? "Low";
-  const alert = ALERT_CONFIG[alertKey] ?? DEFAULT_ALERT;
-  const current = data?.current;
-  const forecast = data?.forecast;
-  const zones = (data?.zones ?? [])
-    .filter((z) => z.riskAssessment?.level > 0)
-    .slice(0, 4);
+    const load = async () => {
+      setAlertsLoading(true);
+      try {
+        if (IS_DEV_MODE) {
+          if (!cancelled) setZoneList(buildZoneList(DEV_FAKE_ZONE_ALERTS));
+          return;
+        }
+        const res = await fetch(`${API_BASE}/api/alerts`);
+        if (!res.ok) throw new Error("fetch failed");
+        const { alerts = [] } = await res.json();
+        const ls = alerts.filter((a) => a.type === "landslide" && a.isActive);
+        if (!cancelled) setZoneList(buildZoneList(ls));
+      } catch (_) {
+        // silent — show last loaded list
+      } finally {
+        if (!cancelled) setAlertsLoading(false);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 2 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOpen]);
+
+  const overallSev = getOverallSeverity(zoneList);
+  const h = HEADER_STYLE[overallSev] ?? HEADER_STYLE.normal;
+  const hasAlerts = zoneList.length > 0;
 
   return (
     <>
-      {/* Icon button */}
+      {/* Toggle button */}
       <button
         onClick={onToggle}
         title="Landslide Risk"
         style={topStyle ?? undefined}
         className={`absolute left-[10px] z-[1000]
                     w-[30px] h-[30px] border flex items-center justify-center
-                    shadow-sm hover:brightness-95 transition-all
-                    ${
-                      isOpen
-                        ? `${alert.buttonBg} ${alert.buttonBorder}
-                           ring-1 ring-offset-1 ${alert.buttonBorder}`
-                        : `${alert.buttonBg} ${alert.buttonBorder}`
-                    }`}
+                    shadow-sm hover:brightness-95 transition-all ${h.btn}
+                    ${isOpen ? "ring-1 ring-offset-1 ring-current" : ""}`}
       >
         {IS_DEV_MODE && (
           <span
             className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 border border-white"
-            title="Dev mode — fake landslide data injected"
+            title="Dev mode"
           />
         )}
-        <Mountain size={15} strokeWidth={1.8} className={alert.iconColor} />
+        <Mountain size={15} strokeWidth={1.8} className={h.iconColor} />
       </button>
 
       {/* Panel */}
       {isOpen && (
         <div
-          className={`absolute top-[90px] left-[50px] z-[1050]
-                      w-64 bg-white border rounded-2xl shadow-xl
-                      overflow-hidden ${alert.border}`}
+          className={`absolute top-[90px] left-[50px] z-[1050] bg-white border rounded-2xl shadow-xl flex flex-col ${h.border}`}
+          style={{ width: "272px", maxHeight: "calc(100vh - 120px)" }}
         >
-          {/* Header */}
+          {/* Header — fixed */}
           <div
-            className={`flex items-center justify-between px-4 py-3
-                        ${alert.bg} border-b ${alert.border}`}
+            className={`flex items-center justify-between px-4 py-3 ${h.bg} border-b ${h.border} flex-shrink-0 rounded-t-2xl`}
           >
             <div className="flex items-center gap-2">
-              <span className="text-sm">{alert.icon}</span>
+              {h.icon}
               <div>
                 <div className="flex items-center gap-1.5">
-                  <p className={`text-xs font-bold ${alert.text}`}>
-                    {alert.label}
-                  </p>
+                  <p className={`text-xs font-bold ${h.text}`}>{h.label}</p>
                   {IS_DEV_MODE && (
                     <span className="text-[8px] bg-yellow-100 text-yellow-700 font-bold px-1.5 py-0.5 rounded">
-                      DEV MODE
+                      DEV
                     </span>
-                  )}
-                  {!IS_DEV_MODE && isOffline && (
-                    <WifiOff
-                      size={10}
-                      className="text-amber-500"
-                      title={`Cached ${timeAgo(cachedAt)}`}
-                    />
                   )}
                 </div>
-                <p className="text-[10px] text-gray-400">
-                  Landslide risk · Antipolo
-                  {IS_DEV_MODE && (
-                    <span className="text-yellow-600 ml-1">
-                      · fake test data
-                    </span>
-                  )}
-                  {!IS_DEV_MODE && isOffline && cachedAt && (
-                    <span className="text-amber-500 ml-1">
-                      · cached {timeAgo(cachedAt)}
-                    </span>
-                  )}
-                </p>
+                <p className="text-[10px] text-gray-400">{h.sub}</p>
               </div>
             </div>
             <button
@@ -291,150 +328,72 @@ const LandslideForecastPanelContent = ({
             </button>
           </div>
 
-          {/* Loading */}
-          {loading && !IS_DEV_MODE && (
-            <div className="px-4 py-4 flex items-center gap-2">
-              <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-gray-400">Loading risk data…</span>
-            </div>
-          )}
-
-          {/* Error */}
-          {!loading && error && !IS_DEV_MODE && (
-            <div className="px-4 py-3 text-xs text-red-500">
-              ⚠️ Unable to load landslide data
-            </div>
-          )}
-
-          {/* Content */}
-          {!loading && data && (
-            <div className="px-4 py-3 flex flex-col gap-3">
-              {/* Dev mode banner */}
-              {IS_DEV_MODE && (
-                <div className="mb-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-[10px] text-yellow-700 text-center">
-                    🧪 DEV MODE — Using fake landslide data
-                  </p>
-                </div>
-              )}
-
-              {/* Rainfall summary row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <Droplets size={12} className="text-blue-400" />
-                  Rain (24 h / 72 h)
-                </div>
-                <span className="text-xs font-semibold text-gray-700">
-                  {current?.rainfall24h?.toFixed(1) ?? "—"} mm
-                  <span className="text-gray-400 font-normal ml-1">
-                    / {current?.rainfall72h?.toFixed(1) ?? "—"} mm
-                  </span>
-                </span>
-              </div>
-
-              {/* Soil moisture row */}
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs text-gray-500">Soil moisture</span>
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                      current?.soilSaturated
-                        ? "bg-red-100 text-red-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}
-                  >
-                    {current?.soilSaturated ? "Saturated" : "Normal"}
-                    {" · "}
-                    {current?.soilMoisture?.toFixed(3) ?? "—"} m³/m³
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            <div className="px-4 py-3 flex flex-col gap-2">
+              {/* Alert zone list */}
+              {alertsLoading && !hasAlerts ? (
+                <div className="py-4 flex items-center justify-center gap-2">
+                  <div className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-gray-400">
+                    Checking alerts…
                   </span>
                 </div>
-                <SoilMoistureBar value={current?.soilMoisture ?? 0} />
-                <div className="flex justify-between mt-0.5">
-                  <span className="text-[8px] text-gray-300">Dry</span>
-                  <span className="text-[8px] text-gray-300">Sat. ≥ 0.35</span>
-                </div>
-              </div>
-
-              {/* At-risk zones */}
-              {zones.length > 0 && (
-                <div className="flex flex-col gap-1.5 border-t border-gray-100 pt-2">
-                  <p className="text-[10px] font-semibold text-gray-500">
-                    At-Risk Zones
-                  </p>
-                  {zones.map((zone, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-600 truncate max-w-[160px]">
-                        {zone.name}
-                      </span>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                          RISK_BADGE[zone.riskAssessment.label] ??
-                          RISK_BADGE.Low
-                        }`}
-                      >
-                        {zone.riskAssessment.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 7-day rainfall sparkline */}
-              <div className="border-t border-gray-100 pt-2">
-                <p className="text-[10px] font-semibold text-gray-500 mb-1">
-                  7-Day Rainfall Forecast (mm)
-                </p>
-                <SparkBar
-                  values={forecast?.precipitation_sum ?? []}
-                  max={Math.max(...(forecast?.precipitation_sum ?? [1]), 1)}
-                />
-                {/* Sparkbar color legend */}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm bg-blue-400" />
-                    <span className="text-[8px] text-gray-400">Low</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm bg-amber-400" />
-                    <span className="text-[8px] text-gray-400">Moderate</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm bg-red-400" />
-                    <span className="text-[8px] text-gray-400">Heavy</span>
-                  </div>
-                </div>
-                <div className="flex justify-between mt-0.5">
-                  {(forecast?.dates ?? []).slice(0, 7).map((d, i) => (
-                    <span key={i} className="text-[8px] text-gray-300">
-                      {new Date(d).toLocaleDateString("en-PH", {
-                        weekday: "narrow",
-                      })}
+              ) : hasAlerts ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <MapPin size={10} className="text-gray-400 flex-shrink-0" />
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                      Affected Zones
+                    </p>
+                    <span className="ml-auto text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded-full">
+                      {zoneList.length}
                     </span>
-                  ))}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {zoneList.map((z) => (
+                      <ZoneRow
+                        key={z.name}
+                        name={z.name}
+                        severity={z.severity}
+                        slopeRisk={z.slopeRisk}
+                        reason={z.reason}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[8px] text-gray-300 leading-tight">
+                    Sorted by severity, then slope steepness.
+                  </p>
+                </>
+              ) : (
+                <div className="py-6 flex flex-col items-center gap-2 text-center">
+                  <Mountain size={22} className="text-gray-200" />
+                  <p className="text-xs font-semibold text-gray-400">
+                    No active landslide alerts
+                  </p>
+                  <p className="text-[10px] text-gray-300 leading-snug max-w-[180px]">
+                    Zones appear here when watch, warning, or evacuation
+                    conditions are triggered.
+                  </p>
                 </div>
-              </div>
-
-              <p className="text-[9px] text-gray-300 text-center border-t border-gray-100 pt-2">
-                Open-Meteo · MGB susceptibility zones
-                {!IS_DEV_MODE && !isOffline && data.generatedAt && (
-                  <span>
-                    {" · Updated "}
-                    {new Date(data.generatedAt).toLocaleTimeString("en-PH", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
-              </p>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Footer — fixed */}
+          <div className="flex-shrink-0 border-t border-gray-100 px-4 py-2.5 rounded-b-2xl">
+            <p className="text-[9px] text-gray-400 font-medium">
+              System landslide prediction
+            </p>
+            <p className="text-[9px] text-gray-300">updated every 15 min</p>
+          </div>
         </div>
       )}
     </>
   );
 };
 
-// Main component — guard on visible only; hooks inside always run
+// Main component — guard on visible; hooks inside always run
 const LandslideForecastPanel = (props) => {
   if (!props.visible) return null;
   return <LandslideForecastPanelContent {...props} />;

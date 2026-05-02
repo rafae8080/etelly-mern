@@ -35,7 +35,10 @@ export default function CreateAlertModal({ onClose, onCreated }) {
         import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
       const res = await fetch(`${API_BASE}/api/alerts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+        },
         body: JSON.stringify({
           source: form.source,
           type: form.type,
@@ -96,13 +99,7 @@ export default function CreateAlertModal({ onClose, onCreated }) {
                            text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
               >
                 <option value="CDRRMO">CDRRMO</option>
-                <option value="GDACS">GDACS</option>
-                <option value="USGS">USGS</option>
-                <option value="OCD">OCD</option>
-                <option value="NDRRMC">NDRRMC</option>
-                <option value="PAGASA">PAGASA</option>
-                <option value="PHIVOLCS">PHIVOLCS</option>
-                <option value="Residents">Residents</option>
+                <option value="residents">Residents</option>
                 <option value="system">System</option>
               </select>
             </div>

@@ -69,7 +69,7 @@ export default function EarthquakePanel({
       {/* Panel */}
       {isOpen && (
         <div
-          className="absolute z-[1000] bg-white rounded-lg shadow-lg border border-gray-200 p-4"
+          className="absolute z-[1050] bg-white rounded-lg shadow-lg border border-gray-200 p-4"
           style={{ left: 50, top: "210px", minWidth: "280px" }}
         >
           <div className="flex items-center justify-between mb-3">

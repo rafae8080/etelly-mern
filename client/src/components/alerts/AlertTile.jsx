@@ -1,92 +1,82 @@
 import { Clock, MapPin, X } from "lucide-react";
-import { SEVERITY_CONFIG, SOURCE_CONFIG } from "../../hooks/useAlerts";
-import SeverityIcon from "./SeverityIcon";
+import { SOURCE_CONFIG } from "../../hooks/useAlerts";
 import { timeAgo, timeUntil } from "../../utils/timeHelpers";
 
-// ─── Single Alert Tile ─────────────────────────────────────────────────────────
+const SEV_STYLE = {
+  evacuate: { badge: "bg-red-50 text-red-600", label: "EVACUATE" },
+  critical: { badge: "bg-red-50 text-red-800", label: "Critical" },
+  warning: { badge: "bg-amber-50 text-amber-700", label: "Warning" },
+  watch: { badge: "bg-blue-50 text-blue-700", label: "Watch" },
+};
+
+const SEV_EXPIRY = {
+  evacuate: "text-red-500",
+  critical: "text-red-500",
+  warning: "text-amber-500",
+  watch: "text-blue-500",
+};
 
 export default function AlertTile({ alert, onDismissRequest }) {
-  const sev = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.watch;
+  const style = SEV_STYLE[alert.severity] ?? SEV_STYLE.watch;
   const src = SOURCE_CONFIG[alert.source] ?? SOURCE_CONFIG.system;
+  const until = alert.expiresAt ? timeUntil(alert.expiresAt) : null;
 
   return (
-    <div
-      className={`bg-white rounded-xl border-l-4 ${sev.leftBorder}
-                  border border-gray-100 shadow-sm
-                  hover:shadow-md transition-all overflow-hidden`}
-    >
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {/* Severity icon */}
-          <div
-            className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center
-                        justify-center ${sev.bg} ${sev.text}`}
-          >
-            <SeverityIcon severity={alert.severity} size={15} />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            {/* Header row: severity · source · type — all on the same line */}
-            <div className="flex flex-wrap items-center gap-1.5 mb-1">
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sev.bg} ${sev.text}`}
-              >
-                {sev.label}
-              </span>
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${src.bg} ${src.text} ${src.border}`}
-              >
-                {src.label}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 capitalize">
-                {alert.type}
-              </span>
-            </div>
-
-            {/* Title */}
-            <h3 className="text-sm font-semibold text-gray-900 leading-snug">
-              {alert.title}
-            </h3>
-
-            {/* Full description */}
-            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-              {alert.description}
+    <div className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all p-4">
+      {/* Title + severity badge + dismiss */}
+      <div className="flex items-start justify-between gap-2 mb-0.5">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900 leading-snug">
+            {alert.title}
+          </h3>
+          {alert.location && (
+            <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+              <MapPin size={10} className="text-gray-300 flex-shrink-0" />
+              <span className="truncate max-w-[200px]">{alert.location}</span>
             </p>
-
-            {/* Location */}
-            {alert.location && (
-              <div className="flex items-center gap-1 mt-1.5">
-                <MapPin size={10} className="text-gray-400 flex-shrink-0" />
-                <span className="text-[11px] text-gray-400 truncate">
-                  {alert.location}
-                </span>
-              </div>
-            )}
-
-            {/* Time */}
-            <div className="flex items-center gap-1 mt-2">
-              <Clock size={10} className="text-gray-300" />
-              <span className="text-[11px] text-gray-400">
-                {timeAgo(alert.createdAt)}
-                {alert.expiresAt &&
-                  timeUntil(alert.expiresAt) !== "expired" && (
-                    <span className="ml-2 text-gray-300">
-                      · expires in {timeUntil(alert.expiresAt)}
-                    </span>
-                  )}
-              </span>
-            </div>
-          </div>
-
-          {/* Dismiss button */}
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${style.badge}`}
+          >
+            {style.label}
+          </span>
           <button
             onClick={() => onDismissRequest(alert)}
-            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center
-                       text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-            title="Remove alert"
+            className="text-gray-300 hover:text-red-400 transition-colors"
+            title="Dismiss alert"
           >
-            <X size={13} />
+            <X size={15} />
           </button>
+        </div>
+      </div>
+
+      {/* Description */}
+      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2 mt-1.5">
+        {alert.description}
+      </p>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${src.bg} ${src.text} ${src.border}`}
+          >
+            {src.label}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 capitalize">
+            {alert.type}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-mono shrink-0">
+          <Clock size={10} className="text-gray-300 flex-shrink-0" />
+          <span>{timeAgo(alert.createdAt)}</span>
+          {until && until !== "expired" && (
+            <span className={SEV_EXPIRY[alert.severity] ?? "text-gray-400"}>
+              · expires {until}
+            </span>
+          )}
         </div>
       </div>
     </div>

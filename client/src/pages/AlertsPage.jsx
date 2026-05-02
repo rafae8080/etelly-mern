@@ -1,22 +1,45 @@
-import { useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Plus, RefreshCw, ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
 import { useAlerts } from "../hooks/useAlerts";
 import { timeAgo } from "../utils/timeHelpers";
 import AlertList from "../components/alerts/AlertList";
-import SummaryBar from "../components/alerts/SummaryBar";
 import FilterTabs from "../components/alerts/FilterTabs";
 import CreateAlertModal from "../components/alerts/CreateAlertModal";
 import DismissConfirmModal from "../components/alerts/DismissConfirmModal";
 
-// ─── Main AlertsPage ───────────────────────────────────────────────────────────
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
+function fmtTime(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function AlertsPage() {
   const { alerts, loading, error, lastFetched, dismiss, refresh, counts } =
     useAlerts();
 
-  const [showModal, setShowModal] = useState(false);
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [showModal,      setShowModal]      = useState(false);
+  const [activeFilter,   setActiveFilter]   = useState("all");
   const [pendingDismiss, setPendingDismiss] = useState(null);
+  const [logs,           setLogs]           = useState([]);
+  const [logsOpen,       setLogsOpen]       = useState(false);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/alerts/log`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setLogs(data.entries ?? []);
+    } catch {
+      // non-critical
+    }
+  }, []);
 
   const filtered =
     activeFilter === "all"
@@ -27,50 +50,65 @@ export default function AlertsPage() {
     if (pendingDismiss) {
       dismiss(pendingDismiss._id);
       setPendingDismiss(null);
+      fetchLogs();
     }
   };
 
+  const handleCreated = () => {
+    refresh();
+    fetchLogs();
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between gap-4 flex-shrink-0">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Alerts</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Antipolo City — live hazard & evacuation alerts
+          <p className="text-sm text-gray-500 mt-1">
+            Antipolo City — Hazard &amp; Evacuation Operations
           </p>
           {lastFetched && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 mt-0.5 font-mono">
               Updated {timeAgo(lastFetched)}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={refresh}
-            className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center
-                       text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+            className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center
+                       text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors"
             title="Refresh alerts"
           >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl
-                       hover:bg-red-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg
+                       hover:bg-red-700 active:bg-red-800 transition-colors flex items-center gap-1.5"
           >
-            <Plus size={15} />
-            Create Alert
+            <Plus size={14} />
+            New Alert
           </button>
         </div>
       </div>
 
-      {/* Summary */}
-      {counts.total > 0 && (
-        <div className="mb-4 flex-shrink-0">
-          <SummaryBar counts={counts} />
-        </div>
-      )}
+      {/* Summary stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Total Alerts", value: counts.total,           color: "text-gray-900"  },
+          { label: "Evacuate",     value: counts.evacuate ?? 0,   color: "text-red-600"   },
+          { label: "Warning",      value: counts.warning  ?? 0,   color: "text-amber-600" },
+          { label: "Watch",        value: counts.watch    ?? 0,   color: "text-blue-600"  },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p className="text-xs text-gray-400 font-medium">{s.label}</p>
+            <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
 
       {/* Filter tabs */}
       <FilterTabs
@@ -89,11 +127,69 @@ export default function AlertsPage() {
         onRetry={refresh}
       />
 
+      {/* Activity log panel */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <button
+          onClick={() => {
+            if (!logsOpen) fetchLogs();
+            setLogsOpen((o) => !o);
+          }}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <ClipboardList size={15} className="text-gray-400" />
+            Activity Log
+            {logs.length > 0 && (
+              <span className="bg-gray-100 text-gray-500 text-xs font-medium px-2 py-0.5 rounded-full">
+                {logs.length}
+              </span>
+            )}
+          </div>
+          {logsOpen
+            ? <ChevronUp size={15} className="text-gray-400" />
+            : <ChevronDown size={15} className="text-gray-400" />}
+        </button>
+
+        {logsOpen && (
+          <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-80 overflow-y-auto">
+            {logs.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">
+                No activity recorded yet.
+              </p>
+            ) : (
+              logs.map((entry) => (
+                <div key={entry._id} className="px-4 py-2.5 flex items-start gap-3">
+                  <div className="w-7 h-7 bg-red-50 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-[10px] font-bold text-red-500">
+                      {(entry.by ?? "?").charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-700">
+                      <span className="font-semibold">{entry.by}</span>{" "}
+                      <span className="text-gray-500">
+                        {entry.action === "created" ? "created" : "dismissed"}
+                      </span>{" "}
+                      <span className="text-gray-600 italic truncate">
+                        "{entry.alertTitle}"
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {fmtTime(entry.at)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Create Alert Modal */}
       {showModal && (
         <CreateAlertModal
           onClose={() => setShowModal(false)}
-          onCreated={refresh}
+          onCreated={handleCreated}
         />
       )}
 

@@ -10,6 +10,8 @@ import userRoutes from "./routes/users.js";
 import hazardRoutes from "./routes/hazard.js";
 import alertRoutes from "./routes/alerts.js";
 import reportRoutes from "./routes/reports.js";
+import evacuationRoutes from "./routes/evacuation.js";
+import communityRoutes from "./routes/community.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
@@ -27,12 +29,17 @@ const io = new Server(server, {
 app.use(cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
 app.use(express.json());
 
+// Make io accessible inside route handlers via req.app.get("io")
+app.set("io", io);
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hazard", hazardRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/evacuation", evacuationRoutes);
+app.use("/api/community", communityRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {

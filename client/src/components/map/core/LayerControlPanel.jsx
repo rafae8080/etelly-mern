@@ -1,4 +1,12 @@
-import { Waves, Mountain, Flame, MapPin, CircleDot, Wind } from "lucide-react";
+import {
+  Waves,
+  Mountain,
+  Flame,
+  MapPin,
+  CircleDot,
+  Wind,
+  Tent,
+} from "lucide-react";
 import RainfallStrip from "../flood/RainfallStrip";
 
 const LAYERS = [
@@ -37,6 +45,13 @@ const LAYERS = [
     Icon: MapPin,
     activeColor: "bg-purple-500",
     ring: "ring-purple-400",
+  },
+  {
+    key: "evacuation",
+    label: "Evacuation Centers",
+    Icon: Tent,
+    activeColor: "bg-green-500",
+    ring: "ring-green-400",
   },
 ];
 
@@ -97,7 +112,7 @@ const LayerControlPanel = ({ layers, onToggleLayer }) => {
         })}
       </div>
 
-      <RainfallStrip visible={layers.flood} />
+      <RainfallStrip visible={layers.flood || layers.landslide} />
     </div>
   );
 };

@@ -1,30 +1,8 @@
-// ─── Summary Bar Redesign ─────────────────────────────────────────────────────
-
 const SUMMARY_ITEMS = [
-  {
-    key: "evacuate",
-    label: "Evacuate",
-    color: "bg-red-600 text-white",
-    border: "border-red-700",
-  },
-  {
-    key: "critical",
-    label: "Critical",
-    color: "bg-red-100 text-red-800",
-    border: "border-red-200",
-  },
-  {
-    key: "warning",
-    label: "Warning",
-    color: "bg-amber-100 text-amber-800",
-    border: "border-amber-200",
-  },
-  {
-    key: "watch",
-    label: "Watch",
-    color: "bg-blue-100 text-blue-800",
-    border: "border-blue-200",
-  },
+  { key: "evacuate", label: "Evacuate", countColor: "text-red-600",   labelColor: "text-red-500",   bg: "bg-red-50",   border: "border-red-100",   dot: "bg-red-500"   },
+  { key: "critical", label: "Critical", countColor: "text-red-800",   labelColor: "text-red-600",   bg: "bg-red-50",   border: "border-red-100",   dot: "bg-red-700"   },
+  { key: "warning",  label: "Warning",  countColor: "text-amber-800", labelColor: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100", dot: "bg-amber-500" },
+  { key: "watch",    label: "Watch",    countColor: "text-blue-800",  labelColor: "text-blue-600",  bg: "bg-blue-50",  border: "border-blue-100",  dot: "bg-blue-500"  },
 ];
 
 export default function SummaryBar({ counts }) {
@@ -32,22 +10,17 @@ export default function SummaryBar({ counts }) {
   if (items.length === 0) return null;
 
   return (
-    <div
-      className="grid gap-2 w-full"
-      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-    >
+    <div className="flex gap-2 flex-wrap">
       {items.map((i) => (
         <div
           key={i.key}
-          className={`flex flex-col items-center justify-center py-3 px-2 rounded-md border ${i.color} ${i.border} shadow-sm`}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border ${i.bg} ${i.border}`}
         >
-          {/* Large count on top */}
-          <span className="text-xl font-black leading-none">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${i.dot}`} />
+          <span className={`text-lg font-bold font-mono leading-none ${i.countColor}`}>
             {counts[i.key]}
           </span>
-
-          {/* Label on bottom */}
-          <span className="text-[10px] uppercase tracking-wider font-bold mt-1 opacity-90">
+          <span className={`text-xs font-semibold uppercase tracking-widest ${i.labelColor}`}>
             {i.label}
           </span>
         </div>

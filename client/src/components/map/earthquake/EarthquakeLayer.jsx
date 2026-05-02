@@ -86,37 +86,59 @@ export default function EarthquakeLayer({ visible, filters = {} }) {
 
   // USGS API endpoint for past 30 days, magnitude 2.5+
   const USGS_API_URL =
-    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson";
+    "https://earthquake.usgs.gov/fdsnws/event/1/query";
 
   // Fetch earthquake data from USGS
   const fetchEarthquakeData = async () => {
     try {
       setLoading(true);
 
-      // Build query parameters based on filters
-      const params = new URLSearchParams();
-      params.append("format", "geojson");
-      params.append("starttime", filters.timeRange || getDefaultStartTime());
-      params.append("endtime", new Date().toISOString());
-      params.append("minmagnitude", filters.minMagnitude || 2.5);
+      // filters.starttime is the ISO date computed by EarthquakePanel when the
+      // user picks a time range. filters.timeRange ("day"/"week"/"month") is a
+      // UI label only — passing it directly to USGS causes a 400 Bad Request.
+      const starttime = filters.starttime || getDefaultStartTime();
+      const endtime = new Date().toISOString();
+      const minMagnitude = parseFloat(filters.minMagnitude) || 2.5;
+      const limit = parseInt(filters.limit, 10) || 100;
 
-      if (filters.maxMagnitude) {
-        params.append("maxmagnitude", filters.maxMagnitude);
+      // Guard: abort if either date is not a valid ISO 8601 string.
+      if (isNaN(Date.parse(starttime)) || isNaN(Date.parse(endtime))) {
+        console.error("[EarthquakeLayer] Invalid date params — fetch aborted:", {
+          starttime,
+          endtime,
+        });
+        return;
       }
 
-      // Limit to Philippines region if specified
+      const params = new URLSearchParams({
+        format: "geojson",
+        starttime,
+        endtime,
+        minmagnitude: minMagnitude,
+        limit,
+        orderby: "magnitude",
+      });
+
+      if (filters.maxMagnitude != null && !isNaN(parseFloat(filters.maxMagnitude))) {
+        params.set("maxmagnitude", parseFloat(filters.maxMagnitude));
+      }
+
       if (filters.region === "philippines") {
-        params.append("minlatitude", "4.5");
-        params.append("maxlatitude", "21.5");
-        params.append("minlongitude", "116.0");
-        params.append("maxlongitude", "127.0");
+        params.set("minlatitude", "4.5");
+        params.set("maxlatitude", "21.5");
+        params.set("minlongitude", "116.0");
+        params.set("maxlongitude", "127.0");
       }
 
-      // Limit results
-      params.append("limit", filters.limit || 100);
-      params.append("orderby", "magnitude");
+      const url = `${USGS_API_URL}?${params.toString()}`;
+      console.log("[EarthquakeLayer] Full USGS URL:", url);
 
-      const response = await fetch(`${USGS_API_URL}&${params.toString()}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[EarthquakeLayer] USGS ${response.status}:`, errorText);
+        throw new Error(`USGS API ${response.status}: ${errorText.slice(0, 150)}`);
+      }
       const data = await response.json();
 
       console.log(

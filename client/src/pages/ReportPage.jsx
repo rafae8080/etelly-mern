@@ -173,17 +173,24 @@ export default function ReportsPage() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Report Monitoring</h1>
-        <p className="text-gray-600 mt-2">Active disaster emergency reports</p>
-        <button
-          onClick={fetchReports}
-          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm"
-        >
-          Refresh Reports
-        </button>
+      <div className="flex justify-between">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Report Monitoring
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Active disaster emergency reports
+          </p>
+        </div>
+        <div>
+          <button
+            onClick={fetchReports}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+          >
+            Refresh Reports
+          </button>
+        </div>
       </div>
-
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">

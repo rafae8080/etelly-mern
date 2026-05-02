@@ -1,35 +1,40 @@
-import DashboardCard from "../components/admin/DashboardCard";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Bell,
   Map,
-  Waves,
   MapPin,
   Package,
   Users,
   Volume2,
-  Dam,
   InfoIcon,
   HandHelpingIcon,
+  ShieldCheck,
+  Clock,
 } from "lucide-react";
+import DashboardCard from "../components/admin/DashboardCard";
+import { useAlerts } from "../hooks/useAlerts";
+
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
 const modules = [
   {
     title: "Alerts",
-    description: "Manage disaster alerts and view reports",
+    description: "Manage disaster alerts and notifications",
     icon: Bell,
     href: "/alerts",
     color: "bg-red-600",
   },
   {
     title: "Reports",
-    description: "Manage disaster alerts and view reports",
+    description: "Review emergency reports from the community",
     icon: Volume2,
     href: "/reports",
     color: "bg-blue-800",
   },
   {
     title: "Hazard Mapping",
-    description: "Manual confirm hazard incidents",
+    description: "View live hazard layers on the map",
     icon: Map,
     href: "/hazard-map",
     color: "bg-orange-500",
@@ -72,47 +77,339 @@ const modules = [
   },
 ];
 
+// Matches SummaryBar's visual language — soft bg, dot, font-mono count
+const SEVERITY_ROWS = [
+  {
+    key: "evacuate",
+    label: "Evacuate",
+    dot: "bg-red-500",
+    count: "text-red-700",
+    label_: "text-red-500",
+    bg: "bg-red-50",
+    border: "border-red-100",
+  },
+  {
+    key: "critical",
+    label: "Critical",
+    dot: "bg-red-700",
+    count: "text-red-800",
+    label_: "text-red-600",
+    bg: "bg-red-50",
+    border: "border-red-100",
+  },
+  {
+    key: "warning",
+    label: "Warning",
+    dot: "bg-amber-500",
+    count: "text-amber-800",
+    label_: "text-amber-600",
+    bg: "bg-amber-50",
+    border: "border-amber-100",
+  },
+  {
+    key: "watch",
+    label: "Watch",
+    dot: "bg-blue-500",
+    count: "text-blue-800",
+    label_: "text-blue-600",
+    bg: "bg-blue-50",
+    border: "border-blue-100",
+  },
+];
+
+// Left-border accent per severity — matches AlertTile
+const ALERT_LEFT_BORDER = {
+  evacuate: "border-l-red-500",
+  critical: "border-l-red-700",
+  warning: "border-l-amber-500",
+  watch: "border-l-blue-400",
+};
+
+// Soft badge per severity — matches SummaryBar/AlertTile badge style
+const ALERT_BADGE = {
+  evacuate: "bg-red-100 text-red-700",
+  critical: "bg-red-50 text-red-800 border border-red-200",
+  warning: "bg-amber-50 text-amber-800 border border-amber-200",
+  watch: "bg-blue-50 text-blue-800 border border-blue-200",
+};
+
+const ALERT_LABEL = {
+  evacuate: "EVACUATE",
+  critical: "Critical",
+  warning: "Warning",
+  watch: "Watch",
+};
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function SkeletonRow() {
+  return (
+    <div className="px-5 py-4 flex items-center gap-3 animate-pulse border-l-4 border-l-gray-100">
+      <div className="h-4 w-14 bg-gray-100 rounded-full" />
+      <div className="flex-1 h-4 bg-gray-100 rounded" />
+      <div className="h-3 w-10 bg-gray-100 rounded" />
+    </div>
+  );
+}
+
+function AllClearState({ label }) {
+  return (
+    <div className="px-6 py-10 text-center">
+      <ShieldCheck size={26} className="text-green-400 mx-auto mb-2" />
+      <p className="text-sm text-gray-400">{label}</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
-  const userRole = localStorage.getItem("user")
-    ? JSON.parse(localStorage.getItem("user")).role
-    : null;
+  const { alerts, loading: alertsLoading, counts } = useAlerts();
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+
+  const stored = localStorage.getItem("user");
+  const user = stored ? JSON.parse(stored) : null;
+  const userRole = user?.role ?? null;
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/reports`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.reports) setReports(data.reports);
+      })
+      .catch(() => {})
+      .finally(() => setReportsLoading(false));
+  }, []);
 
   const visibleModules = modules.filter(
-    (module) => !module.adminOnly || userRole === "admin",
+    (m) => !m.adminOnly || userRole === "admin",
   );
+  const pendingReports = reports.filter(
+    (r) => (r.status || "pending") === "pending",
+  );
+  const recentAlerts = alerts.slice(0, 5);
+  const recentPending = pendingReports.slice(0, 4);
 
   return (
     <div>
-      {/* Page Header */}
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
-        <p className="text-gray-600 mt-2">
-          Welcome to E-Telly Admin Dashboard — Disaster Preparedness & Community
-          Resource Management
+        <p className="text-gray-500 mt-1 text-sm">
+          {user?.name ? `Welcome back, ${user.name}` : "Welcome"} — Antipolo
+          City CDRRMO
         </p>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm">
-          <p className="text-sm text-gray-600 mb-1">Total Active Alerts</p>
-          <p className="text-3xl font-bold text-gray-900">3</p>
-          <p className="text-sm text-blue-600 mt-2">↑ 2 new today</p>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        {/* Active Alerts */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Active Alerts
+            </p>
+            <Bell size={16} className="text-gray-300" />
+          </div>
+          {alertsLoading ? (
+            <div className="h-50 w-16 bg-gray-100 rounded animate-pulse" />
+          ) : (
+            <p className="text-4xl font-bold font-mono text-gray-900">
+              {counts.total}
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-3">Refreshes every 60s</p>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm">
-          <p className="text-sm text-gray-600 mb-1">Pending Requests</p>
-          <p className="text-3xl font-bold text-gray-900">24</p>
+
+        {/* Alerts by Severity — SummaryBar visual language */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
+            Alerts by Severity
+          </p>
+          {alertsLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-7 bg-gray-100 rounded animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {SEVERITY_ROWS.map(
+                ({ key, label, dot, count, label_, bg, border }) => (
+                  <div
+                    key={key}
+                    className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg ${bg} border ${border}`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`}
+                    />
+                    <span
+                      className={`text-xs font-semibold uppercase tracking-wide flex-1 ${label_}`}
+                    >
+                      {label}
+                    </span>
+                    <span className={`text-sm font-bold font-mono ${count}`}>
+                      {counts[key]}
+                    </span>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm">
-          <p className="text-sm text-gray-600 mb-1">Dam Level</p>
-          <p className="text-3xl font-bold text-gray-900">68.67 M</p>
+
+        {/* Pending Reports */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Pending Reports
+            </p>
+            <Clock size={16} className="text-gray-300" />
+          </div>
+          {reportsLoading ? (
+            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+          ) : (
+            <p
+              className={`text-4xl font-bold font-mono ${
+                pendingReports.length > 0 ? "text-amber-600" : "text-gray-900"
+              }`}
+            >
+              {pendingReports.length}
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-3">
+            {pendingReports.length > 0 ? "Awaiting review" : "Nothing pending"}
+          </p>
         </div>
       </div>
 
-      {/* Module Cards */}
+      {/* Live Feeds */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+        {/* Recent Alerts */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col min-h-[320px]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-800">
+                Recent Alerts
+              </h2>
+            </div>
+            <Link
+              to="/alerts"
+              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+            >
+              View all →
+            </Link>
+          </div>
+
+          <div className="flex-1 divide-y divide-gray-50">
+            {alertsLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+            ) : recentAlerts.length === 0 ? (
+              <AllClearState label="No active alerts — situation is clear" />
+            ) : (
+              recentAlerts.map((alert) => {
+                const leftBorder =
+                  ALERT_LEFT_BORDER[alert.severity] ?? "border-l-gray-200";
+                const badge =
+                  ALERT_BADGE[alert.severity] ?? "bg-gray-100 text-gray-600";
+                const label = ALERT_LABEL[alert.severity] ?? alert.severity;
+                return (
+                  <div
+                    key={alert._id}
+                    className={`px-5 py-3.5 flex items-start gap-3 border-l-4 ${leftBorder}`}
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${badge}`}
+                    >
+                      {label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-800 truncate leading-snug">
+                        {alert.title}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono capitalize">
+                        {alert.type} · {timeAgo(alert.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Pending Reports Feed */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col min-h-[320px]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-800">
+              Pending Reports
+            </h2>
+            <Link
+              to="/reports"
+              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+            >
+              View all →
+            </Link>
+          </div>
+
+          <div className="flex-1 divide-y divide-gray-50">
+            {reportsLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+            ) : recentPending.length === 0 ? (
+              <AllClearState label="No pending reports — all reviewed" />
+            ) : (
+              recentPending.map((report) => {
+                const type = report.emergencyType
+                  ? report.emergencyType.charAt(0).toUpperCase() +
+                    report.emergencyType.slice(1)
+                  : "Report";
+                const location =
+                  report.location?.exactAddress ||
+                  report.location ||
+                  "Unknown location";
+                const reporter =
+                  report.userData?.fullName || report.userName || "Anonymous";
+                return (
+                  <div
+                    key={report._id || report.id}
+                    className="px-5 py-3.5 flex items-start gap-3 border-l-4 border-l-amber-400"
+                  >
+                    <span className="mt-0.5 shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide bg-amber-50 text-amber-800 border border-amber-200">
+                      {type}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-800 truncate leading-snug">
+                        {location}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+                        {reporter} · {timeAgo(report.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Access */}
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Features</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">
+          Quick Access
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {visibleModules.map((module) => (
             <DashboardCard key={module.href} {...module} />
           ))}

@@ -42,15 +42,29 @@ export const UserLocationMarker = ({ onLocated }) => {
 
   useEffect(() => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
+
+    let watchId;
+
+    // watchPosition keeps refining the fix as the device gets a better GPS lock.
+    // Once accuracy reaches 50 m or better we stop watching — that's precise
+    // enough for barangay-level map centering. On desktop (no GPS chip) the
+    // browser returns a WiFi/IP estimate and accuracy won't improve further.
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
         setPosition(coords);
         onLocated?.(coords);
+
+        // Stop watching once accuracy is good enough
+        if (pos.coords.accuracy <= 50) {
+          navigator.geolocation.clearWatch(watchId);
+        }
       },
       (err) => console.warn("Geolocation:", err.message),
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
+
+    return () => navigator.geolocation.clearWatch(watchId);
   }, [map]);
 
   if (!position) return null;
