@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Bell,
@@ -20,6 +20,7 @@ import DashboardCard from "../components/admin/DashboardCard";
 import { useAlerts } from "../hooks/useAlerts";
 import { timeAgo } from "../utils/timeHelpers";
 import { useCommunitySharing } from "../hooks/useCommunitySharing";
+import { connectSocket } from "../utils/socket";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
@@ -133,7 +134,7 @@ export default function DashboardPage() {
   const user = stored ? JSON.parse(stored) : null;
   const userRole = user?.role ?? null;
 
-  useEffect(() => {
+  const fetchReports = useCallback(() => {
     fetch(`${API_BASE}/api/reports`)
       .then((r) => r.json())
       .then((data) => {
@@ -142,6 +143,19 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => setReportsLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchReports();
+
+    const socket = connectSocket();
+    socket.on("new_emergency_report", fetchReports);
+    socket.on("report_updated", fetchReports);
+
+    return () => {
+      socket.off("new_emergency_report", fetchReports);
+      socket.off("report_updated", fetchReports);
+    };
+  }, [fetchReports]);
 
   const visibleModules = modules.filter(
     (m) => !m.adminOnly || userRole === "admin",

@@ -16,6 +16,10 @@ dist-ssr
 .claude/
 CLAUDE.md
 
+
+DEPLOYMENT.md
+DOCUMENTATION.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

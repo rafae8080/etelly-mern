@@ -176,7 +176,14 @@ export default function EarthquakeLayer({ visible, filters = {}, refreshTrigger 
 
   // Update markers when earthquake data changes
   useEffect(() => {
-    if (!markersLayer || !visible || !earthquakes.length) return;
+    if (!markersLayer) return;
+
+    if (!visible) {
+      markersLayer.clearLayers();
+      return;
+    }
+
+    if (!earthquakes.length) return;
 
     // Clear existing markers
     markersLayer.clearLayers();

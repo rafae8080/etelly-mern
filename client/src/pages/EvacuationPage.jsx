@@ -278,6 +278,9 @@ export default function EvacuationPage() {
   const editCenter = centers.find((c) => c._id === editId) ?? null;
   const brgyLabel  = BARANGAYS.find((b) => b.value === barangay)?.label ?? barangay;
 
+  const stored = localStorage.getItem("user");
+  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
@@ -465,8 +468,8 @@ export default function EvacuationPage() {
         </div>
       )}
 
-      {/* Activity log panel */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Activity log panel — admin only */}
+      {isAdmin && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button
           onClick={() => setLogsOpen((o) => !o)}
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -511,7 +514,7 @@ export default function EvacuationPage() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Edit modal */}
       {editCenter && (

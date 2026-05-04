@@ -10,6 +10,9 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
   const [error,      setError]      = useState("");
   const [showLog,    setShowLog]    = useState(false);
 
+  const stored = localStorage.getItem("user");
+  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+
   const handleAction = async () => {
     if (action === "reject" && !note.trim()) {
       setError("A reason is required when rejecting.");
@@ -146,12 +149,14 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
         </div>
 
         <div className="p-6 border-t border-gray-200 space-y-3">
-          <button
-            onClick={() => setShowLog(true)}
-            className="w-full py-1.5 text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            View action log
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowLog(true)}
+              className="w-full py-1.5 text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              View action log
+            </button>
+          )}
 
           {isPending && !action && (
             <div className="flex gap-3">

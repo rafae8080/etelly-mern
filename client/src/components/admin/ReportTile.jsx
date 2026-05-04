@@ -31,6 +31,9 @@ export default function ReportTile({
   const [resolveBy, setResolveBy] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
 
+  const stored = localStorage.getItem("user");
+  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+
   const getLocationString = () => {
     if (typeof location === "string") return location;
     if (location && typeof location === "object")
@@ -233,8 +236,8 @@ export default function ReportTile({
                 </div>
               )}
 
-              {/* Activity Log */}
-              {logs.length > 0 && (
+              {/* Activity Log — admin only */}
+              {isAdmin && logs.length > 0 && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Activity Log</p>
                   <div className="space-y-1">

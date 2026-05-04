@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useMap } from "react-leaflet";
-import { Crosshair, Map, Droplets, MapPin, Maximize2, Minimize2 } from "lucide-react";
+import {
+  Crosshair,
+  Map,
+  Droplets,
+  MapPin,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 
 // core
 import BaseMap from "../components/map/core/BaseMap";
@@ -101,11 +108,20 @@ const INITIAL_LAYERS = {
 
 function buildAttribution(layers) {
   const sources = new Set();
-  if (layers.flood)     { sources.add("Open-Meteo"); sources.add("Phil-LiDAR"); }
-  if (layers.typhoon)   { sources.add("PAGASA"); sources.add("GDACS"); }
-  if (layers.landslide) { sources.add("Open-Meteo"); sources.add("MGB"); }
-  if (layers.earthquake)  sources.add("USGS");
-  if (layers.reports)     sources.add("Community Reports");
+  if (layers.flood) {
+    sources.add("Open-Meteo");
+    sources.add("Phil-LiDAR");
+  }
+  if (layers.typhoon) {
+    sources.add("PAGASA");
+    sources.add("GDACS");
+  }
+  if (layers.landslide) {
+    sources.add("Open-Meteo");
+    sources.add("MGB");
+  }
+  if (layers.earthquake) sources.add("USGS");
+  if (layers.reports) sources.add("Community Reports");
   return Array.from(sources).join(" · ");
 }
 
@@ -117,7 +133,10 @@ export default function HazardMapPage() {
   const [flyTrigger, setFlyTrigger] = useState(0);
   const [activePopup, setActivePopup] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [offlineInfo, setOfflineInfo] = useState({ isOffline: false, cachedAt: null });
+  const [offlineInfo, setOfflineInfo] = useState({
+    isOffline: false,
+    cachedAt: null,
+  });
 
   const [reportFilters, setReportFilters] = useState({ types: ["all"] });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -142,14 +161,17 @@ export default function HazardMapPage() {
 
   const handleOfflineChange = useCallback(({ isOffline, cachedAt }) => {
     setOfflineInfo((prev) => {
-      if (prev.isOffline === isOffline && prev.cachedAt === cachedAt) return prev;
+      if (prev.isOffline === isOffline && prev.cachedAt === cachedAt)
+        return prev;
       return { isOffline, cachedAt };
     });
   }, []);
 
   // Close fullscreen on Escape key
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") setIsFullscreen(false); };
+    const onKey = (e) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
@@ -161,9 +183,17 @@ export default function HazardMapPage() {
   }, []);
 
   const formatTime = (d) =>
-    d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) +
+    d.toLocaleDateString("en-PH", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }) +
     " · " +
-    d.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    d.toLocaleTimeString("en-PH", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
 
   const formatDateTime = (ts) => {
     if (!ts) return "unknown";
@@ -177,8 +207,8 @@ export default function HazardMapPage() {
 
   const buttonStack = useMemo(() => {
     const stack = ["basemap", "recenter"];
-    if (layers.flood)     stack.push("forecast");
-    if (layers.typhoon)   stack.push("typhoon");
+    if (layers.flood) stack.push("forecast");
+    if (layers.typhoon) stack.push("typhoon");
     if (layers.landslide) stack.push("landslide");
     if (layers.earthquake) stack.push("earthquake");
     return stack;
@@ -201,7 +231,9 @@ export default function HazardMapPage() {
       {loading && (
         <div className="absolute inset-0 z-[2000] bg-white flex flex-col items-center justify-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm font-medium">Loading hazard map…</p>
+          <p className="text-gray-400 text-sm font-medium">
+            Loading hazard map…
+          </p>
         </div>
       )}
 
@@ -227,7 +259,10 @@ export default function HazardMapPage() {
       </BaseMap>
 
       {offlineInfo.isOffline && (
-        <OfflineBanner cachedAt={offlineInfo.cachedAt} onRefresh={() => window.location.reload()} />
+        <OfflineBanner
+          cachedAt={offlineInfo.cachedAt}
+          onRefresh={() => window.location.reload()}
+        />
       )}
 
       {/* Top-right badge + fullscreen button */}
@@ -235,8 +270,12 @@ export default function HazardMapPage() {
         <div className="bg-white/90 backdrop-blur border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm pointer-events-none">
           <MapPin size={14} className="text-red-500 shrink-0" />
           <div>
-            <p className="text-gray-800 text-xs font-bold leading-none">{CITY_NAME}</p>
-            <p className="text-gray-400 text-[10px] mt-0.5 leading-none">{attribution}</p>
+            <p className="text-gray-800 text-xs font-bold leading-none">
+              {CITY_NAME}
+            </p>
+            <p className="text-gray-400 text-[10px] mt-0.5 leading-none">
+              {attribution}
+            </p>
           </div>
         </div>
         {!isFullscreen && (
@@ -262,7 +301,9 @@ export default function HazardMapPage() {
         <Map
           size={15}
           strokeWidth={1.8}
-          className={activePopup === "basemap" ? "text-blue-500" : "text-gray-500"}
+          className={
+            activePopup === "basemap" ? "text-blue-500" : "text-gray-500"
+          }
         />
       </button>
 
@@ -325,7 +366,10 @@ export default function HazardMapPage() {
       {activePopup === "basemap" && (
         <BasemapPicker
           active={basemap}
-          onChange={(key) => { setBasemap(key); setActivePopup(null); }}
+          onChange={(key) => {
+            setBasemap(key);
+            setActivePopup(null);
+          }}
           onClose={() => setActivePopup(null)}
         />
       )}
@@ -352,8 +396,12 @@ export default function HazardMapPage() {
           <div className="flex items-center gap-2.5">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <MapPin size={14} className="text-red-400" />
-            <span className="text-white text-sm font-bold tracking-wide">{CITY_NAME}</span>
-            <span className="text-gray-500 text-xs hidden sm:inline">— CDRRMO Disaster Monitoring</span>
+            <span className="text-white text-sm font-bold tracking-wide">
+              {CITY_NAME}
+            </span>
+            <span className="text-gray-500 text-xs hidden sm:inline">
+              — CDRRMO Disaster Monitoring
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -385,9 +433,7 @@ export default function HazardMapPage() {
         </div>
 
         {/* Map area */}
-        <div className="flex-1 relative overflow-hidden">
-          {mapInterior}
-        </div>
+        <div className="flex-1 relative overflow-hidden">{mapInterior}</div>
       </div>
     );
   }
@@ -409,13 +455,17 @@ export default function HazardMapPage() {
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span className="text-sm text-amber-600">
                 Last update:{" "}
-                <span className="font-semibold">{formatDateTime(offlineInfo.cachedAt)}</span>
+                <span className="font-semibold">
+                  {formatDateTime(offlineInfo.cachedAt)}
+                </span>
               </span>
             </>
           ) : (
             <>
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm text-slate-600 tabular-nums">{formatTime(now)}</span>
+              <span className="text-sm text-slate-600 tabular-nums">
+                {formatTime(now)}
+              </span>
             </>
           )}
         </div>

@@ -24,6 +24,9 @@ export default function AlertsPage() {
   const { alerts, loading, error, lastFetched, dismiss, refresh, counts } =
     useAlerts();
 
+  const stored = localStorage.getItem("user");
+  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+
   const [showModal,      setShowModal]      = useState(false);
   const [activeFilter,   setActiveFilter]   = useState("all");
   const [pendingDismiss, setPendingDismiss] = useState(null);
@@ -127,8 +130,8 @@ export default function AlertsPage() {
         onRetry={refresh}
       />
 
-      {/* Activity log panel */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Activity log panel — admin only */}
+      {isAdmin && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <button
           onClick={() => {
             if (!logsOpen) fetchLogs();
@@ -183,7 +186,7 @@ export default function AlertsPage() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Create Alert Modal */}
       {showModal && (
