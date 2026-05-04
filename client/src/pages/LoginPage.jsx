@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Shield } from "lucide-react";
+import navotasImg from "../images/navotas.jpg";
+import logoImg from "../images/logtell1.png";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
@@ -48,13 +50,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative flex items-stretch">
       {/* Background */}
-      <div className="absolute inset-0 bg-[url('/images/navotas.jpg')] bg-cover bg-center" />
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${navotasImg})` }} />
       <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-red-950/60" />
 
       {/* Left — Branding (desktop) */}
       <div className="relative hidden lg:flex lg:w-1/2 xl:w-3/5 flex-col items-center justify-center p-16 text-white">
         <img
-          src="src/images/logtell1.png"
+          src={logoImg}
           alt="E-Telly Logo"
           className="w-28 h-32 mb-6 drop-shadow-2xl"
         />
@@ -74,7 +76,7 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
             <img
-              src="src/images/logtell1.png"
+              src={logoImg}
               alt="E-Telly Logo"
               className="w-16 h-20 mx-auto mb-3"
             />
