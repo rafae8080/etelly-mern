@@ -31,13 +31,13 @@ export default function RequestsView({ requests, loading, onRefresh }) {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-6 border-b border-gray-200 bg-white px-2 py-2.5">
-        <div className="flex gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6 border-b border-gray-200 bg-white px-2 py-2.5">
+        <div className="flex gap-4 overflow-x-auto pb-0.5">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSearch(""); }}
-              className={`pb-3 px-1 font-medium transition-colors whitespace-nowrap ${
+              className={`pb-3 px-1 font-medium transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === tab
                   ? "border-b-2 border-red-500 text-red-500"
                   : "text-gray-500 hover:text-gray-700"
@@ -47,13 +47,13 @@ export default function RequestsView({ requests, loading, onRefresh }) {
             </button>
           ))}
         </div>
-        <div className="pb-3">
+        <div className="pb-0 sm:pb-3">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, address, date…"
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-56 focus:outline-none focus:ring-2 focus:ring-red-300 text-gray-700 placeholder-gray-400"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-red-300 text-gray-700 placeholder-gray-400"
           />
         </div>
       </div>

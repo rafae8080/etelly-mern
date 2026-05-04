@@ -384,7 +384,7 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">
           Quick Access
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
           {visibleModules.map((module) => (
             <DashboardCard key={module.href} {...module} />
           ))}

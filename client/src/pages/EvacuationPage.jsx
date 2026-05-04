@@ -404,7 +404,7 @@ export default function EvacuationPage() {
                     </div>
 
                     {/* Controls */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-y-1">
                       <div className="flex items-center gap-1.5">
                         <Users size={12} className="text-gray-400 shrink-0" />
                         <span className="text-xs text-gray-400">Evacuees:</span>
@@ -456,7 +456,7 @@ export default function EvacuationPage() {
                         >+</button>
                       </div>
 
-                      <span className="text-[10px] text-gray-400 shrink-0">
+                      <span className="text-[10px] text-gray-400">
                         {c.updatedAt ? `Updated ${fmtTime(c.updatedAt)}` : "Not yet updated"}
                       </span>
                     </div>
