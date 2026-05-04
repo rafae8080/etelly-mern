@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Waves,
   Mountain,
@@ -6,6 +7,8 @@ import {
   CircleDot,
   Wind,
   Tent,
+  Layers,
+  X,
 } from "lucide-react";
 import RainfallStrip from "../flood/RainfallStrip";
 
@@ -25,7 +28,7 @@ const LAYERS = [
     ring: "ring-purple-400",
   },
   {
-    key: "landslide", // ← ADD THIS
+    key: "landslide",
     label: "Landslide Hazard",
     Icon: Mountain,
     activeColor: "bg-amber-500",
@@ -38,7 +41,6 @@ const LAYERS = [
     activeColor: "bg-red-500",
     ring: "ring-red-400",
   },
-
   {
     key: "reports",
     label: "Live Reports",
@@ -56,16 +58,21 @@ const LAYERS = [
 ];
 
 const LayerControlPanel = ({ layers, onToggleLayer }) => {
-  return (
-    <div
-      className="absolute top-[72px] right-4 z-[1000] w-56
-                    bg-white/95 backdrop-blur border border-gray-200
-                    rounded-2xl shadow-lg overflow-hidden"
-    >
-      <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const activeCount = Object.entries(layers).filter(([, v]) => v).length;
+
+  const panelContent = (
+    <>
+      <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex items-center justify-between">
         <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
           Layers
         </p>
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden text-gray-400 hover:text-gray-600 p-0.5"
+        >
+          <X size={13} />
+        </button>
       </div>
 
       <div className="px-3 py-2 flex flex-col gap-1">
@@ -100,10 +107,7 @@ const LayerControlPanel = ({ layers, onToggleLayer }) => {
                 {label}
               </span>
               {disabled && (
-                <span
-                  className="text-[9px] bg-gray-100 text-gray-400
-                                 px-1.5 py-0.5 rounded-full"
-                >
+                <span className="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">
                   Soon
                 </span>
               )}
@@ -113,7 +117,39 @@ const LayerControlPanel = ({ layers, onToggleLayer }) => {
       </div>
 
       <RainfallStrip visible={layers.flood || layers.landslide} />
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile toggle button — hidden on desktop */}
+      {!mobileOpen && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="lg:hidden absolute top-[72px] right-4 z-[1001]
+                     w-10 h-10 bg-white/95 backdrop-blur border border-gray-200
+                     rounded-xl shadow-lg flex items-center justify-center relative"
+        >
+          <Layers size={16} className="text-gray-600" />
+          {activeCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white
+                             text-[9px] font-bold rounded-full flex items-center justify-center">
+              {activeCount}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* Panel — always visible on desktop, toggle on mobile */}
+      <div
+        className={`absolute top-[72px] right-4 z-[1000] w-56
+                    bg-white/95 backdrop-blur border border-gray-200
+                    rounded-2xl shadow-lg overflow-hidden
+                    ${mobileOpen ? "block" : "hidden"} lg:block`}
+      >
+        {panelContent}
+      </div>
+    </>
   );
 };
 

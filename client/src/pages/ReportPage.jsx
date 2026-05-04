@@ -218,42 +218,40 @@ export default function ReportsPage() {
       )}
 
       {/* Header */}
-      <div className="flex justify-between">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Report Monitoring</h1>
-          <p className="text-gray-600 mt-2">Active disaster emergency reports</p>
-        </div>
+      <div className="flex items-start justify-between mb-6 sm:mb-8">
         <div>
-          <button
-            onClick={fetchReports}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
-          >
-            Refresh Reports
-          </button>
+          <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Report Monitoring</h1>
+          <p className="text-gray-600 mt-1 text-sm">Active disaster emergency reports</p>
         </div>
+        <button
+          onClick={fetchReports}
+          className="mt-1 px-3 py-2 bg-red-600 text-white rounded-lg text-sm shrink-0"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Total Reports</p>
-          <p className="text-3xl font-bold text-gray-900">{totalReports}</p>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Reports</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900">{totalReports}</p>
           {newTodayCount > 0 && (
-            <p className="text-sm text-blue-600 mt-2 flex items-center gap-1">
+            <p className="text-xs sm:text-sm text-blue-600 mt-1 sm:mt-2 flex items-center gap-1">
               <TrendingUp size={13} />
               {newTodayCount} new today
             </p>
           )}
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">High Priority</p>
-          <p className="text-3xl font-bold text-red-600">{highPriorityCount}</p>
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">High Priority</p>
+          <p className="text-2xl sm:text-3xl font-bold text-red-600">{highPriorityCount}</p>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Rescue Needed</p>
-          <p className="text-3xl font-bold text-orange-600">{rescueNeededCount}</p>
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 col-span-2 md:col-span-1">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">Rescue Needed</p>
+          <p className="text-2xl sm:text-3xl font-bold text-orange-600">{rescueNeededCount}</p>
         </div>
       </div>
 
