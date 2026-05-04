@@ -13,6 +13,8 @@ dist-ssr
 *.local
 
 
+.claude/
+CLAUDE.md
 
 
 DEPLOYMENT.md
