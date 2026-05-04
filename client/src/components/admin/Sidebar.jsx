@@ -10,7 +10,7 @@ import {
   Package,
   Users,
   Menu,
-  X,
+  ChevronLeft,
   Dam,
   InfoIcon,
   HandHelpingIcon,
@@ -88,7 +88,7 @@ export default function Sidebar() {
               onClick={() => setIsOpen(false)}
               className="lg:hidden p-1 rounded-md hover:bg-gray-100 text-gray-500 mt-0.5"
             >
-              <X size={20} />
+              <ChevronLeft size={20} />
             </button>
           </div>
 
