@@ -267,7 +267,7 @@ export default function ReportsPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap shrink-0 ${
                 activeTab === tab.key
                   ? "border-red-500 text-red-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"

@@ -128,7 +128,7 @@ const LayerControlPanel = ({ layers, onToggleLayer }) => {
           onClick={() => setMobileOpen(true)}
           className="lg:hidden absolute top-[72px] right-4 z-[1001]
                      w-10 h-10 bg-white/95 backdrop-blur border border-gray-200
-                     rounded-xl shadow-lg flex items-center justify-center relative"
+                     rounded-xl shadow-lg flex items-center justify-center"
         >
           <Layers size={16} className="text-gray-600" />
           {activeCount > 0 && (
