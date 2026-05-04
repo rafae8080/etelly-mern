@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Shield } from "lucide-react";
-import navotasImg from "../images/navotas.jpg";
+import antipoloImg from "../images/antipolo.jpg";
 import logoImg from "../images/logtell1.png";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
@@ -50,7 +50,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative flex items-stretch">
       {/* Background */}
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${navotasImg})` }} />
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${antipoloImg})` }}
+      />
       <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-red-950/60" />
 
       {/* Left — Branding (desktop) */}
