@@ -444,12 +444,12 @@ export default function HazardMapPage() {
       {/* Title bar */}
       <div className="mb-4 flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Hazard Map</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {CITY_NAME} — Disaster Preparedness Viewer
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           {offlineInfo.isOffline ? (
             <>
               <span className="w-2 h-2 rounded-full bg-amber-400" />
@@ -472,7 +472,7 @@ export default function HazardMapPage() {
       </div>
 
       {/* Map wrapper */}
-      <div className="relative flex-1 rounded-2xl overflow-hidden isolate border border-gray-200 shadow-lg min-h-[550px]">
+      <div className="relative flex-1 rounded-2xl overflow-hidden isolate border border-gray-200 shadow-lg min-h-[400px] sm:min-h-[550px]">
         {mapInterior}
       </div>
     </div>

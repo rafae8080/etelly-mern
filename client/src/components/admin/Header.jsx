@@ -37,7 +37,7 @@ export default function Header({ userEmail = "", onLogout }) {
           <div className="flex items-center gap-4">
             {/* User info */}
             <div className="flex items-center gap-3">
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium">
                   {userEmail || "Admin User"}
                 </p>
@@ -55,7 +55,7 @@ export default function Header({ userEmail = "", onLogout }) {
               title="Logout"
             >
               <LogOut size={16} />
-              Log out
+              <span className="hidden sm:inline">Log out</span>
             </button>
           </div>
         </div>
