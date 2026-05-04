@@ -1,6 +1,6 @@
-// client/src/components/map/earthquake/EarthquakePanel.jsx
 import { useState } from "react";
-import { Activity, ChevronDown, Settings, RefreshCw } from "lucide-react";
+import { Activity, RefreshCw, WifiOff, X } from "lucide-react";
+import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
 const TIME_RANGES = [
   { value: "day", label: "Past 24 Hours" },
@@ -15,13 +15,43 @@ const MAGNITUDE_OPTIONS = [
   { value: 6.0, label: "M6.0+ (Strong)" },
 ];
 
+const fetchEarthquakeDefault = () => {
+  const starttime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const params = new URLSearchParams({
+    format: "geojson",
+    starttime,
+    endtime: new Date().toISOString(),
+    minmagnitude: "2.5",
+    limit: "100",
+    orderby: "magnitude",
+    minlatitude: "4.5",
+    maxlatitude: "21.5",
+    minlongitude: "116.0",
+    maxlongitude: "127.0",
+  });
+  return fetch(
+    `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`,
+  ).then((r) => {
+    if (!r.ok) throw new Error(`USGS ${r.status}`);
+    return r.json();
+  });
+};
+
+const timeAgo = (ts) => {
+  if (!ts) return "";
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+};
+
 export default function EarthquakePanel({
   visible,
   isOpen,
   onToggle,
   onFilterChange,
   onRefresh,
-  lastUpdated,
+  topStyle,
 }) {
   const [filters, setFilters] = useState({
     timeRange: "week",
@@ -29,14 +59,15 @@ export default function EarthquakePanel({
     region: "philippines",
     limit: 100,
   });
-
-  const [showSettings, setShowSettings] = useState(false);
+  const { isOffline, cachedAt } = useOfflineCache(
+    "earthquake",
+    fetchEarthquakeDefault,
+    5 * 60 * 1000,
+  );
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-
-    // Convert timeRange to actual date
     if (key === "timeRange") {
       const date = new Date();
       if (value === "day") date.setDate(date.getDate() - 1);
@@ -44,19 +75,25 @@ export default function EarthquakePanel({
       if (value === "month") date.setDate(date.getDate() - 30);
       newFilters.starttime = date.toISOString();
     }
-
     onFilterChange?.(newFilters);
   };
 
   if (!visible) return null;
 
+  const updatedAt = cachedAt
+    ? new Date(cachedAt).toLocaleTimeString("en-PH", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
   return (
     <>
-      {/* Main Button */}
+      {/* Button */}
       <button
         onClick={onToggle}
         className="absolute z-[1000] w-[30px] h-[30px] bg-white border border-gray-300 flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors"
-        style={{ left: 10, top: "210px", position: "absolute" }}
+        style={{ left: 10, position: "absolute", ...topStyle }}
         title="Earthquake Tracker"
       >
         <Activity
@@ -69,142 +106,120 @@ export default function EarthquakePanel({
       {/* Panel */}
       {isOpen && (
         <div
-          className="absolute z-[1050] bg-white rounded-lg shadow-lg border border-gray-200 p-4"
-          style={{ left: 50, top: "210px", minWidth: "280px" }}
+          className="absolute top-[90px] left-[50px] z-[1050] bg-white border border-gray-200 rounded-2xl shadow-xl flex flex-col"
+          style={{ width: "272px", maxHeight: "calc(100vh - 120px)" }}
         >
-          <div className="flex items-center justify-between mb-3">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100 flex-shrink-0 rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <Activity size={18} className="text-orange-500" />
-              <h3 className="font-semibold text-gray-900">
-                Earthquake Tracker
-              </h3>
+              <Activity size={16} className="text-orange-500" />
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-gray-700">
+                    Earthquake Tracker
+                  </p>
+                  {isOffline && (
+                    <WifiOff
+                      size={10}
+                      className="text-amber-500"
+                      title={`Cached ${timeAgo(cachedAt)}`}
+                    />
+                  )}
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  USGS Earthquake API
+                  {isOffline && cachedAt && (
+                    <span className="text-amber-500 ml-1">
+                      · cached {timeAgo(cachedAt)}
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => {
-                  onRefresh?.();
-                  onFilterChange?.(filters);
-                }}
+                onClick={() => onRefresh?.()}
                 className="p-1 hover:bg-gray-100 rounded"
                 title="Refresh data"
               >
                 <RefreshCw size={14} />
               </button>
               <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-1 hover:bg-gray-100 rounded"
-                title="Settings"
+                onClick={onToggle}
+                className="p-1 hover:bg-gray-100 rounded text-gray-300 hover:text-gray-500 transition-colors"
               >
-                {showSettings ? (
-                  <ChevronDown size={14} />
-                ) : (
-                  <Settings size={14} />
-                )}
+                <X size={14} />
               </button>
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="bg-orange-50 rounded-lg p-2">
-              <p className="text-xs text-orange-600">Source</p>
-              <p className="text-sm font-semibold">USGS</p>
+          {/* Filters — always visible */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">
+                Time Range
+              </label>
+              <select
+                value={filters.timeRange}
+                onChange={(e) => handleFilterChange("timeRange", e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5"
+              >
+                {TIME_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="bg-blue-50 rounded-lg p-2">
-              <p className="text-xs text-blue-600">Region</p>
-              <p className="text-sm font-semibold">
-                {filters.region === "philippines" ? "Philippines" : "Global"}
-              </p>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">
+                Minimum Magnitude
+              </label>
+              <select
+                value={filters.minMagnitude}
+                onChange={(e) =>
+                  handleFilterChange("minMagnitude", parseFloat(e.target.value))
+                }
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5"
+              >
+                {MAGNITUDE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.region === "philippines"}
+                  onChange={(e) =>
+                    handleFilterChange(
+                      "region",
+                      e.target.checked ? "philippines" : "global",
+                    )
+                  }
+                  className="rounded border-gray-300 text-orange-600"
+                />
+                <span className="text-sm text-gray-700">
+                  Philippines only
+                </span>
+              </label>
             </div>
           </div>
 
-          {lastUpdated && (
-            <p className="text-xs text-gray-500 mb-3">
-              Last updated: {lastUpdated.toLocaleTimeString()}
+          {/* Footer */}
+          <div className="flex-shrink-0 border-t border-gray-100 px-4 py-2.5 flex flex-col gap-0.5 rounded-b-2xl">
+            <p className="text-[9px] text-gray-400 font-medium">
+              USGS Earthquake Hazards Program
             </p>
-          )}
-
-          {/* Settings Panel */}
-          {showSettings && (
-            <div className="space-y-3 pt-3 border-t border-gray-200">
-              {/* Time Range */}
-              <div>
-                <label className="text-xs font-medium text-gray-700 mb-1 block">
-                  Time Range
-                </label>
-                <select
-                  value={filters.timeRange}
-                  onChange={(e) =>
-                    handleFilterChange("timeRange", e.target.value)
-                  }
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5"
-                >
-                  {TIME_RANGES.map((range) => (
-                    <option key={range.value} value={range.value}>
-                      {range.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Minimum Magnitude */}
-              <div>
-                <label className="text-xs font-medium text-gray-700 mb-1 block">
-                  Minimum Magnitude
-                </label>
-                <select
-                  value={filters.minMagnitude}
-                  onChange={(e) =>
-                    handleFilterChange(
-                      "minMagnitude",
-                      parseFloat(e.target.value),
-                    )
-                  }
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5"
-                >
-                  {MAGNITUDE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Region Toggle */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.region === "philippines"}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        "region",
-                        e.target.checked ? "philippines" : "global",
-                      )
-                    }
-                    className="rounded border-gray-300 text-orange-600"
-                  />
-                  <span className="text-sm text-gray-700">
-                    Limit to Philippines only
-                  </span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Legend */}
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs font-medium text-gray-700 mb-2">
-              Magnitude Scale
+            <p className="text-[9px] text-gray-300 leading-tight">
+              updated every 5 min
+              {updatedAt && !isOffline && (
+                <span className="ml-1">· last run {updatedAt}</span>
+              )}
             </p>
-            <div className="space-y-1">
-              <LegendItem color="#b91c1c" label="7.0+ (Major)" />
-              <LegendItem color="#ef4444" label="6.0-6.9 (Strong)" />
-              <LegendItem color="#f97316" label="5.0-5.9 (Moderate)" />
-              <LegendItem color="#eab308" label="4.0-4.9 (Light)" />
-              <LegendItem color="#06b6d4" label="3.0-3.9 (Minor)" />
-              <LegendItem color="#6b7280" label="<3.0 (Micro)" />
-            </div>
           </div>
         </div>
       )}
@@ -212,14 +227,3 @@ export default function EarthquakePanel({
   );
 }
 
-function LegendItem({ color, label }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className="w-3 h-3 rounded-full border-2 border-white shadow-sm"
-        style={{ backgroundColor: color }}
-      />
-      <span className="text-xs text-gray-600">{label}</span>
-    </div>
-  );
-}

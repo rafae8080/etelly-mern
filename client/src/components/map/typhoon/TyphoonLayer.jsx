@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Polyline, Popup, Circle, Marker } from "react-leaflet";
-import { Wind, X, Info, FlaskConical, WifiOff } from "lucide-react";
+import { Wind, X, FlaskConical, WifiOff } from "lucide-react";
 import L from "leaflet";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
@@ -30,63 +30,6 @@ const DEV_FAKE_STORM = {
   ],
 };
 
-const SEASON_DEFS = {
-  active: {
-    months: [6, 7, 8, 9, 10, 11],
-    label: "Peak Season",
-    color: "text-red-600",
-    bg: "bg-red-50",
-    dot: "bg-red-500",
-  },
-  shoulder: {
-    months: [5, 12],
-    label: "Active Season",
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-    dot: "bg-amber-500",
-  },
-  quiet: {
-    months: [1, 2, 3, 4],
-    label: "Quiet Season",
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    dot: "bg-blue-400",
-  },
-};
-
-function getSeasonStatus() {
-  const month = new Date().getMonth() + 1;
-  if (SEASON_DEFS.active.months.includes(month)) return SEASON_DEFS.active;
-  if (SEASON_DEFS.shoulder.months.includes(month)) return SEASON_DEFS.shoulder;
-  return SEASON_DEFS.quiet;
-}
-
-const PAGASA_SIGNALS = [
-  {
-    signal: "Signal #4",
-    wind: "≥ 185 km/h",
-    color: "#7c3aed",
-    desc: "Destructive typhoon force winds",
-  },
-  {
-    signal: "Signal #3",
-    wind: "100–184 km/h",
-    color: "#dc2626",
-    desc: "Damaging typhoon force winds",
-  },
-  {
-    signal: "Signal #2",
-    wind: "61–99 km/h",
-    color: "#f97316",
-    desc: "Moderate tropical storm winds",
-  },
-  {
-    signal: "Signal #1",
-    wind: "30–60 km/h",
-    color: "#3b82f6",
-    desc: "Tropical cyclone nearby",
-  },
-];
 
 const ALERT_COLORS = {
   green: {
@@ -159,6 +102,7 @@ function StormMapLayer({ storm }) {
           dashArray: "6 4",
         }}
       />
+
       {storm.forecastTrack?.length >= 2 && (
         <Polyline
           positions={storm.forecastTrack.map((p) => [p.lat, p.lon])}
@@ -184,7 +128,7 @@ function StormMapLayer({ storm }) {
             <div
               className={`flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg ${alertCfg.bg}`}
             >
-              <span className="text-base">🌀</span>
+              <Wind size={14} className={alertCfg.text} />
               <div>
                 <p className={`text-sm font-bold ${alertCfg.text}`}>
                   {storm.name}
@@ -239,18 +183,13 @@ function StormMapLayer({ storm }) {
 
 // ── NoStormContent — pure DOM, used inside TyphoonPanel ──────────────────
 function NoStormContent() {
-  const season = getSeasonStatus();
   return (
     <div className="flex flex-col">
-      <div className={`mx-3 mt-3 mb-2.5 rounded-xl px-3 py-2.5 ${season.bg}`}>
+      <div className="mx-3 mt-3 mb-2.5 rounded-xl px-3 py-2.5 bg-blue-50">
         <div className="flex items-center gap-2 mb-1">
-          <span
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${season.dot}`}
-          />
-          <p
-            className={`text-[10px] font-bold uppercase tracking-wider ${season.color}`}
-          >
-            {season.label}
+          <span className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-400" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+            No Active Storms
           </p>
         </div>
         <p className="text-[10px] text-gray-500 leading-snug">
@@ -258,36 +197,7 @@ function NoStormContent() {
           Responsibility (PAR).
         </p>
       </div>
-      <div className="px-3 pb-1">
-        <div className="flex items-center gap-1 mb-2">
-          <Info size={9} className="text-gray-400" />
-          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
-            PAGASA Wind Signals
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          {PAGASA_SIGNALS.map(({ signal, wind, color, desc }) => (
-            <div key={signal} className="flex items-start gap-2">
-              <div
-                className="w-2.5 h-2.5 rounded-sm mt-0.5 flex-shrink-0"
-                style={{ backgroundColor: color }}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between gap-1">
-                  <p className="text-[10px] font-bold text-gray-700">
-                    {signal}
-                  </p>
-                  <p className="text-[9px] text-gray-400 font-mono flex-shrink-0">
-                    {wind}
-                  </p>
-                </div>
-                <p className="text-[9px] text-gray-400 leading-none">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="mx-3 mt-2.5 mb-3 border-t border-gray-100 pt-2 flex flex-col gap-1">
+      <div className="mx-3 mt-1 mb-3 border-t border-gray-100 pt-2 flex flex-col gap-1">
         <p className="text-[9px] font-semibold text-gray-400 mb-0.5">
           Data Sources
         </p>
@@ -296,11 +206,6 @@ function NoStormContent() {
             label: "Storm tracking",
             href: "https://www.gdacs.org",
             text: "GDACS",
-          },
-          {
-            label: "PH classification",
-            href: "https://www.pagasa.dost.gov.ph",
-            text: "PAGASA–DOST",
           },
           {
             label: "Regional alerts",
@@ -419,12 +324,11 @@ export const TyphoonPanel = ({
             title="Dev mode — fake storm injected"
           />
         )}
-        <span
-          className={`text-sm ${isOpen || hasActiveStorm ? "text-amber-500" : "text-gray-400"}`}
-          style={{ fontSize: 15, lineHeight: 1 }}
-        >
-          🌀
-        </span>
+        <Wind
+          size={15}
+          strokeWidth={1.8}
+          className={isOpen || hasActiveStorm ? "text-amber-500" : "text-gray-400"}
+        />
       </button>
 
       {/* Panel */}
@@ -440,22 +344,24 @@ export const TyphoonPanel = ({
                            ${hasActiveStorm ? "bg-red-50" : "bg-gray-50"}`}
           >
             <div className="flex items-center gap-2">
-              <span className="text-sm">🌀</span>
+              <Wind size={14} className={hasActiveStorm ? "text-red-500" : "text-gray-400"} />
               <div>
                 <div className="flex items-center gap-1.5">
                   <p
                     className={`text-xs font-bold ${hasActiveStorm ? "text-red-700" : "text-gray-600"}`}
                   >
-                    {hasActiveStorm
-                      ? `${storms.length} Active Storm${storms.length > 1 ? "s" : ""}`
-                      : "No Active Typhoon"}
+                    Storm Tracker
                   </p>
+                  {hasActiveStorm && (
+                    <span className="text-[8px] bg-red-100 text-red-700 font-bold px-1.5 py-0.5 rounded">
+                      {storms.length} ACTIVE
+                    </span>
+                  )}
                   {IS_DEV_MODE && (
                     <span className="text-[8px] bg-yellow-100 text-yellow-700 font-bold px-1.5 py-0.5 rounded">
                       DEV
                     </span>
                   )}
-                  {/* ── Offline indicator — same as LandslideForecastPanel ── */}
                   {!IS_DEV_MODE && isOffline && (
                     <WifiOff
                       size={10}
@@ -465,7 +371,7 @@ export const TyphoonPanel = ({
                   )}
                 </div>
                 <p className="text-[10px] text-gray-400">
-                  Western Pacific · PAR Monitor
+                  GDACS · JMA Tokyo
                   {!IS_DEV_MODE && isOffline && cachedAt && (
                     <span className="text-amber-500 ml-1">
                       · cached {timeAgo(cachedAt)}
@@ -576,9 +482,9 @@ export const TyphoonPanel = ({
                     text: "GDACS",
                   },
                   {
-                    label: "PH classification",
-                    href: "https://www.pagasa.dost.gov.ph",
-                    text: "PAGASA–DOST",
+                    label: "Regional alerts",
+                    href: "https://www.jma.go.jp/en/typh/",
+                    text: "JMA RSMC Tokyo",
                   },
                 ].map(({ label, href, text }) => (
                   <div

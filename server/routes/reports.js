@@ -8,9 +8,6 @@ const router = express.Router();
 // GET /api/reports/approved - Get approved reports
 router.get("/approved", async (req, res) => {
   try {
-    console.log("📋 Fetching approved reports...");
-
-    // Check database connection
     if (mongoose.connection.readyState !== 1) {
       return res.status(500).json({
         success: false,
@@ -37,8 +34,6 @@ router.get("/approved", async (req, res) => {
       .limit(parseInt(limit))
       .toArray();
 
-    console.log(`✅ Found ${reports.length} approved reports`);
-
     // Transform for frontend
     const formattedReports = reports.map((report) => ({
       _id: report._id,
@@ -63,7 +58,6 @@ router.get("/approved", async (req, res) => {
       count: formattedReports.length,
     });
   } catch (error) {
-    console.error("❌ Error fetching approved reports:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch reports",

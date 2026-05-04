@@ -11,9 +11,15 @@ import {
   HandHelpingIcon,
   ShieldCheck,
   Clock,
+  ClipboardList,
+  Gift,
+  ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 import DashboardCard from "../components/admin/DashboardCard";
 import { useAlerts } from "../hooks/useAlerts";
+import { timeAgo } from "../utils/timeHelpers";
+import { useCommunitySharing } from "../hooks/useCommunitySharing";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
@@ -77,47 +83,6 @@ const modules = [
   },
 ];
 
-// Matches SummaryBar's visual language — soft bg, dot, font-mono count
-const SEVERITY_ROWS = [
-  {
-    key: "evacuate",
-    label: "Evacuate",
-    dot: "bg-red-500",
-    count: "text-red-700",
-    label_: "text-red-500",
-    bg: "bg-red-50",
-    border: "border-red-100",
-  },
-  {
-    key: "critical",
-    label: "Critical",
-    dot: "bg-red-700",
-    count: "text-red-800",
-    label_: "text-red-600",
-    bg: "bg-red-50",
-    border: "border-red-100",
-  },
-  {
-    key: "warning",
-    label: "Warning",
-    dot: "bg-amber-500",
-    count: "text-amber-800",
-    label_: "text-amber-600",
-    bg: "bg-amber-50",
-    border: "border-amber-100",
-  },
-  {
-    key: "watch",
-    label: "Watch",
-    dot: "bg-blue-500",
-    count: "text-blue-800",
-    label_: "text-blue-600",
-    bg: "bg-blue-50",
-    border: "border-blue-100",
-  },
-];
-
-// Left-border accent per severity — matches AlertTile
 const ALERT_LEFT_BORDER = {
   evacuate: "border-l-red-500",
   critical: "border-l-red-700",
@@ -125,7 +90,6 @@ const ALERT_LEFT_BORDER = {
   watch: "border-l-blue-400",
 };
 
-// Soft badge per severity — matches SummaryBar/AlertTile badge style
 const ALERT_BADGE = {
   evacuate: "bg-red-100 text-red-700",
   critical: "bg-red-50 text-red-800 border border-red-200",
@@ -139,17 +103,6 @@ const ALERT_LABEL = {
   warning: "Warning",
   watch: "Watch",
 };
-
-function timeAgo(dateStr) {
-  if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 function SkeletonRow() {
   return (
@@ -172,6 +125,7 @@ function AllClearState({ label }) {
 
 export default function DashboardPage() {
   const { alerts, loading: alertsLoading, counts } = useAlerts();
+  const { requests, donations, reqLoading, donLoading } = useCommunitySharing();
   const [reports, setReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(true);
 
@@ -197,6 +151,8 @@ export default function DashboardPage() {
   );
   const recentAlerts = alerts.slice(0, 5);
   const recentPending = pendingReports.slice(0, 4);
+  const pendingRequestsCount = requests.filter((r) => r.status === "pending").length;
+  const offeredDonationsCount = donations.filter((d) => d.status === "offered").length;
 
   return (
     <div>
@@ -210,7 +166,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
         {/* Active Alerts */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
@@ -220,7 +176,7 @@ export default function DashboardPage() {
             <Bell size={16} className="text-gray-300" />
           </div>
           {alertsLoading ? (
-            <div className="h-50 w-16 bg-gray-100 rounded animate-pulse" />
+            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
           ) : (
             <p className="text-4xl font-bold font-mono text-gray-900">
               {counts.total}
@@ -229,44 +185,48 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-400 mt-3">Refreshes every 60s</p>
         </div>
 
-        {/* Alerts by Severity — SummaryBar visual language */}
+        {/* Pending Community Requests */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
-            Alerts by Severity
-          </p>
-          {alertsLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-7 bg-gray-100 rounded animate-pulse"
-                />
-              ))}
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Pending Requests
+            </p>
+            <ClipboardList size={16} className="text-gray-300" />
+          </div>
+          {reqLoading ? (
+            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
           ) : (
-            <div className="space-y-1.5">
-              {SEVERITY_ROWS.map(
-                ({ key, label, dot, count, label_, bg, border }) => (
-                  <div
-                    key={key}
-                    className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg ${bg} border ${border}`}
-                  >
-                    <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`}
-                    />
-                    <span
-                      className={`text-xs font-semibold uppercase tracking-wide flex-1 ${label_}`}
-                    >
-                      {label}
-                    </span>
-                    <span className={`text-sm font-bold font-mono ${count}`}>
-                      {counts[key]}
-                    </span>
-                  </div>
-                ),
-              )}
-            </div>
+            <p
+              className={`text-4xl font-bold font-mono ${
+                pendingRequestsCount > 0 ? "text-amber-600" : "text-gray-900"
+              }`}
+            >
+              {pendingRequestsCount}
+            </p>
           )}
+          <p className="text-xs text-gray-400 mt-3">Community resource requests</p>
+        </div>
+
+        {/* Offered Donations */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Offered Donations
+            </p>
+            <Gift size={16} className="text-gray-300" />
+          </div>
+          {donLoading ? (
+            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+          ) : (
+            <p
+              className={`text-4xl font-bold font-mono ${
+                offeredDonationsCount > 0 ? "text-green-600" : "text-gray-900"
+              }`}
+            >
+              {offeredDonationsCount}
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-3">Awaiting drop-off assignment</p>
         </div>
 
         {/* Pending Reports */}
@@ -299,16 +259,14 @@ export default function DashboardPage() {
         {/* Recent Alerts */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col min-h-[320px]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-800">
-                Recent Alerts
-              </h2>
-            </div>
+            <h2 className="text-sm font-semibold text-gray-800">
+              Recent Alerts
+            </h2>
             <Link
               to="/alerts"
-              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              className="text-xs text-blue-500 hover:text-blue-700 font-medium flex items-center gap-1"
             >
-              View all →
+              View all <ArrowRight size={13} />
             </Link>
           </div>
 
@@ -357,9 +315,9 @@ export default function DashboardPage() {
             </h2>
             <Link
               to="/reports"
-              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              className="text-xs text-blue-500 hover:text-blue-700 font-medium flex items-center gap-1"
             >
-              View all →
+              View all <ArrowRight size={13} />
             </Link>
           </div>
 
@@ -392,8 +350,11 @@ export default function DashboardPage() {
                       <p className="text-sm font-medium text-gray-800 truncate leading-snug">
                         {location}
                       </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+                      <p className="text-[11px] text-gray-400 mt-0.5 font-mono flex items-center gap-1">
                         {reporter} · {timeAgo(report.timestamp)}
+                        {new Date(report.timestamp).toDateString() === new Date().toDateString() && (
+                          <TrendingUp size={11} className="text-blue-400" />
+                        )}
                       </p>
                     </div>
                   </div>

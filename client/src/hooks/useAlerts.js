@@ -54,12 +54,6 @@ export const SOURCE_CONFIG = {
     text: "text-purple-700",
     border: "border-purple-200",
   },
-  USGS: {
-    label: "USGS",
-    bg: "bg-purple-50",
-    text: "text-purple-700",
-    border: "border-purple-200",
-  },
   NDRRMC: {
     label: "NDRRMC",
     bg: "bg-red-50",

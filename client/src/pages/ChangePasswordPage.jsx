@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Check, X as XIcon, Lock } from "lucide-react";
 
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
 function checkStrength(pw) {
   return {
     length: pw.length >= 8,
@@ -53,7 +55,7 @@ export default function ChangePasswordPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        "http://localhost:5000/api/auth/change-password",
+        `${API_BASE}/api/auth/change-password`,
         {
           method: "POST",
           headers: {

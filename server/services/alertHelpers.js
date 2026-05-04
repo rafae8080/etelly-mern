@@ -22,34 +22,17 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export async function upsertSystemAlert({ _dedupeKey, ...alertData }) {
+export async function upsertAlert({ _dedupeKey, source, ...alertData }) {
   await Alert.findOneAndUpdate(
     { _dedupeKey, isActive: true },
     {
-      $set: {
-        ...alertData,
-        source: "system",
-        _dedupeKey,
-        updatedAt: new Date(),
-      },
+      $set: { ...alertData, source, _dedupeKey, updatedAt: new Date() },
       $setOnInsert: { createdAt: new Date(), isActive: true },
     },
     { upsert: true, new: true },
   );
 }
 
-export async function upsertAlert({ _dedupeKey, source, ...alertData }) {
-  await Alert.findOneAndUpdate(
-    { _dedupeKey, isActive: true },
-    {
-      $set: {
-        ...alertData,
-        source,
-        _dedupeKey,
-        updatedAt: new Date(),
-      },
-      $setOnInsert: { createdAt: new Date(), isActive: true },
-    },
-    { upsert: true, new: true },
-  );
+export async function upsertSystemAlert(data) {
+  return upsertAlert({ ...data, source: "system" });
 }

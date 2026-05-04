@@ -77,7 +77,7 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-export default function EarthquakeLayer({ visible, filters = {} }) {
+export default function EarthquakeLayer({ visible, filters = {}, refreshTrigger }) {
   const map = useMap();
   const [earthquakes, setEarthquakes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -131,8 +131,6 @@ export default function EarthquakeLayer({ visible, filters = {} }) {
       }
 
       const url = `${USGS_API_URL}?${params.toString()}`;
-      console.log("[EarthquakeLayer] Full USGS URL:", url);
-
       const response = await fetch(url);
       if (!response.ok) {
         const errorText = await response.text();
@@ -141,13 +139,10 @@ export default function EarthquakeLayer({ visible, filters = {} }) {
       }
       const data = await response.json();
 
-      console.log(
-        `🌍 Fetched ${data.features?.length || 0} earthquakes from USGS`,
-      );
       setEarthquakes(data.features || []);
       setLastUpdated(new Date());
     } catch (error) {
-      console.error("❌ Error fetching USGS earthquake data:", error);
+      console.error("[EarthquakeLayer] USGS fetch error:", error);
     } finally {
       setLoading(false);
     }
@@ -172,12 +167,12 @@ export default function EarthquakeLayer({ visible, filters = {} }) {
     };
   }, [map]);
 
-  // Handle visibility and data updates
+  // Handle visibility, filter, and manual refresh triggers
   useEffect(() => {
     if (visible) {
       fetchEarthquakeData();
     }
-  }, [visible, filters]);
+  }, [visible, filters, refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update markers when earthquake data changes
   useEffect(() => {
@@ -219,7 +214,6 @@ export default function EarthquakeLayer({ visible, filters = {} }) {
     if (!visible) return;
 
     const interval = setInterval(() => {
-      console.log("🔄 Auto-refreshing earthquake data...");
       fetchEarthquakeData();
     }, 300000); // 5 minutes
 
@@ -254,7 +248,7 @@ function createPopupContent(props, lat, lng, depth) {
   // Determine tsunami warning
   const tsunamiWarning =
     props.tsunami === 1
-      ? '<div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 8px 12px; border-radius: 4px; margin-top: 12px;"><p style="margin: 0; font-size: 13px; color: #991b1b; font-weight: 600;">🌊 TSUNAMI WARNING ISSUED</p></div>'
+      ? '<div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 8px 12px; border-radius: 4px; margin-top: 12px;"><p style="margin: 0; font-size: 13px; color: #991b1b; font-weight: 600;">TSUNAMI WARNING ISSUED</p></div>'
       : "";
 
   // Alert level indicator
@@ -262,12 +256,12 @@ function createPopupContent(props, lat, lng, depth) {
   const alertBadge = alertLevel
     ? {
         green:
-          '<span style="background: #dcfce7; color: #166534;">🟢 GREEN</span>',
+          '<span style="background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">GREEN</span>',
         yellow:
-          '<span style="background: #fef3c7; color: #92400e;">🟡 YELLOW</span>',
+          '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">YELLOW</span>',
         orange:
-          '<span style="background: #ffedd5; color: #9a3412;">🟠 ORANGE</span>',
-        red: '<span style="background: #fee2e2; color: #991b1b;">🔴 RED</span>',
+          '<span style="background: #ffedd5; color: #9a3412; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">ORANGE</span>',
+        red: '<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">RED</span>',
       }[alertLevel]
     : "";
 
@@ -305,18 +299,18 @@ function createPopupContent(props, lat, lng, depth) {
       
       <div style="background: #f9fafb; padding: 8px 12px; border-radius: 6px; margin: 12px 0; font-size: 12px;">
         <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-          <span style="color: #6b7280; min-width: 60px;">📍 Time:</span>
+          <span style="color: #6b7280; min-width: 70px;">Time:</span>
           <span style="color: #1f2937;">${time}</span>
         </div>
         <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-          <span style="color: #6b7280; min-width: 60px;">🎯 Coordinates:</span>
+          <span style="color: #6b7280; min-width: 70px;">Coordinates:</span>
           <span style="color: #1f2937;">${lat.toFixed(3)}°, ${lng.toFixed(3)}°</span>
         </div>
         ${
           props.felt
             ? `
         <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-          <span style="color: #6b7280; min-width: 60px;">👥 Felt:</span>
+          <span style="color: #6b7280; min-width: 70px;">Felt:</span>
           <span style="color: #1f2937;">${props.felt} reports</span>
         </div>
         `
@@ -326,7 +320,7 @@ function createPopupContent(props, lat, lng, depth) {
           props.sig
             ? `
         <div style="display: flex; gap: 8px;">
-          <span style="color: #6b7280; min-width: 60px;">📊 Significance:</span>
+          <span style="color: #6b7280; min-width: 70px;">Significance:</span>
           <span style="color: #1f2937;">${props.sig}</span>
         </div>
         `

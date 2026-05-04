@@ -4,7 +4,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { ObjectId } from "mongodb";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import hazardRoutes from "./routes/hazard.js";
@@ -54,28 +53,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "Server is running" });
 });
 
-// Get all reports - FIXED CONNECTION
+// GET all reports — raw collection access for the base /api/reports path (not covered by reportRoutes)
 app.get("/api/reports", async (req, res) => {
   try {
-    // Make sure mongoose is connected
-    if (mongoose.connection.readyState !== 1) {
-      return res
-        .status(500)
-        .json({ success: false, error: "Database not connected" });
-    }
-
-    const db = mongoose.connection.db;
-    const reportsCollection = db.collection("emergency_reports");
-
-    // Get all reports
-    const reports = await reportsCollection
+    if (mongoose.connection.readyState !== 1)
+      return res.status(500).json({ success: false, error: "Database not connected" });
+    const reports = await mongoose.connection.db
+      .collection("emergency_reports")
       .find({})
       .sort({ timestamp: -1 })
       .toArray();
-
-    console.log(`Found ${reports.length} reports in database`);
-    console.log("First report:", reports[0]?.emergencyType);
-
     res.json({ success: true, reports });
   } catch (error) {
     console.error("Error fetching reports:", error);
@@ -83,15 +70,9 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
-// Notify emergency endpoint
+// Receives push from mobile app and broadcasts via Socket.IO
 app.post("/api/notify-emergency", (req, res) => {
   const report = req.body;
-  console.log("========================================");
-  console.log("NEW EMERGENCY REPORT FROM MOBILE APP!");
-  console.log("Type:", report.emergencyType);
-  console.log("Severity:", report.severity);
-  console.log("========================================");
-
   io.emit("new_emergency_report", {
     id: report.reportId,
     emergencyType: report.emergencyType,
@@ -105,7 +86,6 @@ app.post("/api/notify-emergency", (req, res) => {
     description: report.description || "",
     status: "pending",
   });
-
   res.json({ success: true });
 });
 
@@ -113,70 +93,110 @@ app.post("/api/notify-emergency", (req, res) => {
 app.post("/api/reports/update-status", async (req, res) => {
   try {
     const { reportId, status, adminNotes, adminEmail } = req.body;
-    console.log("Updating report:", reportId, "to status:", status);
 
-    const db = mongoose.connection.db;
-    const reportsCollection = db.collection("emergency_reports");
+    const report = status === "approved"
+      ? await mongoose.connection.db.collection("emergency_reports").findOne({ _id: new mongoose.Types.ObjectId(reportId) })
+      : null;
 
-    const result = await reportsCollection.updateOne(
-      { _id: new ObjectId(reportId) },
-      {
-        $set: {
-          status: status,
-          adminNotes: adminNotes || "",
-          reviewedBy: adminEmail || "admin",
-          reviewedAt: new Date().toISOString(),
+    const result = await mongoose.connection.db
+      .collection("emergency_reports")
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(reportId) },
+        {
+          $set: {
+            status,
+            adminNotes: adminNotes || "",
+            reviewedBy: adminEmail || "admin",
+            reviewedAt: new Date().toISOString(),
+          },
+          $push: {
+            logs: {
+              action: status,
+              by: adminEmail || "admin",
+              at: new Date().toISOString(),
+              notes: adminNotes || "",
+            },
+          },
         },
-      },
-    );
-
+      );
     if (result.modifiedCount > 0) {
       io.emit("report_updated", { reportId, status, adminNotes });
+      io.emit("report_status_updated", { reportId, status });
+
+      if (status === "approved" && report) {
+        const severityMap = { high: "critical", medium: "warning", low: "advisory" };
+        const alertSeverity = severityMap[report.severity?.toLowerCase()] || "warning";
+        const typeName = report.emergencyType?.charAt(0).toUpperCase() + report.emergencyType?.slice(1) || "Emergency";
+        const alertDoc = {
+          type: report.emergencyType || "emergency",
+          title: `Community Report: ${typeName}`,
+          message: report.description || "Emergency report approved by CDRRMO",
+          severity: alertSeverity,
+          location: report.location?.exactAddress || (typeof report.location === "string" ? report.location : "") || "Unknown location",
+          source: "community_report",
+          active: true,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          reportId,
+        };
+        const alertResult = await mongoose.connection.db.collection("alerts").insertOne(alertDoc);
+        io.emit("new_alert", { ...alertDoc, _id: alertResult.insertedId });
+      }
+
       res.json({ success: true });
     } else {
       res.json({ success: false });
     }
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error updating report status:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// MongoDB connection - USE THE SAME DATABASE AS FLUTTER
-const MONGO_URI =
-  "mongodb+srv://demo_user:demouser123@cluster0.4vcql9o.mongodb.net/?retryWrites=true&w=majority";
+// Resolve report
+app.post("/api/reports/resolve", async (req, res) => {
+  try {
+    const { reportId, resolvedBy, resolutionNotes } = req.body;
+    const result = await mongoose.connection.db
+      .collection("emergency_reports")
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(reportId) },
+        {
+          $set: {
+            status: "resolved",
+            resolvedBy: resolvedBy || "admin",
+            resolvedAt: new Date().toISOString(),
+            resolutionNotes: resolutionNotes || "",
+          },
+          $push: {
+            logs: {
+              action: "resolved",
+              by: resolvedBy || "admin",
+              at: new Date().toISOString(),
+              notes: resolutionNotes || "",
+            },
+          },
+        },
+      );
+    if (result.modifiedCount > 0) {
+      io.emit("report_updated", { reportId, status: "resolved" });
+      io.emit("report_status_updated", { reportId, status: "resolved" });
+      res.json({ success: true });
+    } else {
+      res.json({ success: false });
+    }
+  } catch (error) {
+    console.error("Error resolving report:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 mongoose
-  .connect(MONGO_URI, {
-    dbName: "etelly", // IMPORTANT: Use "etelly" database
-  })
+  .connect(process.env.MONGO_URI, { dbName: "etelly" })
   .then(() => {
-    console.log("Connected to MongoDB Atlas - Database: etelly");
-    startAlertEngine(); // ← add this
-
-    // Verify the connection
-    const db = mongoose.connection.db;
-    console.log("Database name:", db.databaseName);
-
-    // Check if emergency_reports collection exists
-    db.listCollections().toArray((err, collections) => {
-      const collectionNames = collections.map((c) => c.name);
-      console.log("Collections:", collectionNames);
-
-      if (collectionNames.includes("emergency_reports")) {
-        console.log("✅ emergency_reports collection found");
-        // Count documents
-        const reportsCollection = db.collection("emergency_reports");
-        reportsCollection.countDocuments().then((count) => {
-          console.log(`📊 Total reports in database: ${count}`);
-        });
-      } else {
-        console.log("⚠️ emergency_reports collection not found");
-      }
-    });
-
-    server.listen(5000, () => {
-      console.log(`Server running on http://localhost:5000`);
-    });
+    console.log("Connected to MongoDB Atlas — etelly");
+    startAlertEngine();
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => console.error("MongoDB connection failed:", err));

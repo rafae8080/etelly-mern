@@ -190,7 +190,7 @@ router.get("/typhoon", async (req, res) => {
     if (!rssRes.ok) throw new Error(`GDACS RSS responded ${rssRes.status}`);
     const rssXml = await rssRes.text();
 
-    const storms = parseRssItems(rssXml)
+    const rawStorms = parseRssItems(rssXml)
       .map((item) => {
         if (xmlText(item, "gdacs:eventtype") !== "TC") return null;
 
@@ -240,6 +240,14 @@ router.get("/typhoon", async (req, res) => {
       })
       .filter(Boolean);
 
+    // Enrich each storm with forecast track from GDACS GeoJSON API (parallel)
+    const storms = await Promise.all(
+      rawStorms.map(async (storm) => ({
+        ...storm,
+        forecastTrack: await fetchForecastTrack(storm.id),
+      })),
+    );
+
     const result = { storms, hasActiveStorm: storms.length > 0, fetchedAt: new Date().toISOString() };
     setCached(CACHE_KEY, result, TTL.TYPHOON);
     res.json(result);
@@ -248,6 +256,55 @@ router.get("/typhoon", async (req, res) => {
     res.json({ storms: [], hasActiveStorm: false, fetchedAt: new Date().toISOString(), error: err.message });
   }
 });
+
+// ── GDACS per-event forecast track ───────────────────────────────────────────
+// GDACS provides a GeoJSON endpoint per event that includes future forecast
+// positions as either a LineString feature or a sequence of dated Point features.
+// Both shapes are tried; returns [] if track data is unavailable or the fetch fails.
+async function fetchForecastTrack(eventId) {
+  try {
+    const url =
+      `https://www.gdacs.org/gdacsapi/api/events/geteventdata` +
+      `?eventtype=TC&eventid=${eventId}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json, application/geo+json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const geojson = await res.json();
+
+    const features =
+      geojson.features ??
+      (geojson.type === "Feature" ? [geojson] : []);
+
+    // Shape A: LineString geometry is the full track
+    const line = features.find((f) => f.geometry?.type === "LineString");
+    if (line) {
+      const pts = line.geometry.coordinates
+        .map(([lon, lat]) => ({ lat, lon }))
+        .filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
+      if (pts.length >= 2) return pts;
+    }
+
+    // Shape B: sequence of Point features sorted by date
+    const pts = features
+      .filter((f) => f.geometry?.type === "Point" && f.properties?.fromdate)
+      .sort(
+        (a, b) =>
+          new Date(a.properties.fromdate) - new Date(b.properties.fromdate),
+      )
+      .map((f) => ({
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+      }))
+      .filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
+    if (pts.length >= 2) return pts;
+
+    return [];
+  } catch {
+    return [];
+  }
+}
 
 function classifyTyphoon(windKph) {
   if (windKph >= 220) return { label: "Super Typhoon",          color: "#7c3aed", level: 5 };

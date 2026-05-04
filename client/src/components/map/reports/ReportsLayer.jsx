@@ -129,6 +129,8 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
 export default function ReportsLayer({ visible, filters = {} }) {
   const map = useMap();
   const [reports, setReports] = useState([]);
@@ -136,19 +138,12 @@ export default function ReportsLayer({ visible, filters = {} }) {
   const markersLayerRef = useRef(null);
   const socketRef = useRef(null);
 
-  // Fetch approved reports from API
   const fetchApprovedReports = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        "http://localhost:5000/api/reports/approved",
-      );
+      const response = await fetch(`${API_BASE}/api/reports/approved`);
       const data = await response.json();
-
-      if (data.success && data.reports) {
-        console.log(`Fetched ${data.reports.length} approved reports`);
-        setReports(data.reports);
-      }
+      if (data.success && data.reports) setReports(data.reports);
     } catch (error) {
       console.error("Error fetching approved reports:", error);
     } finally {
@@ -191,8 +186,6 @@ export default function ReportsLayer({ visible, filters = {} }) {
 
     if (!visible || !filteredReports.length) return;
 
-    console.log(`Rendering ${filteredReports.length} report markers`);
-
     filteredReports.forEach((report) => {
       const coords = extractCoordinates(report);
       if (!coords) return;
@@ -226,8 +219,6 @@ export default function ReportsLayer({ visible, filters = {} }) {
     fetchApprovedReports();
 
     socket.on("new_emergency_report", (newReport) => {
-      console.log("New report received via socket:", newReport);
-
       if (newReport.status === "approved") {
         setReports((prev) => {
           const exists = prev.some((r) => r._id === newReport._id);
@@ -238,8 +229,6 @@ export default function ReportsLayer({ visible, filters = {} }) {
     });
 
     socket.on("report_status_updated", (data) => {
-      console.log("Report status updated:", data);
-
       const { reportId, status, report } = data;
 
       setReports((prev) => {
@@ -256,10 +245,7 @@ export default function ReportsLayer({ visible, filters = {} }) {
       });
     });
 
-    const refreshInterval = setInterval(() => {
-      console.log("Auto-refreshing reports...");
-      fetchApprovedReports();
-    }, 120000);
+    const refreshInterval = setInterval(fetchApprovedReports, 120000);
 
     return () => {
       socket.off("new_emergency_report");

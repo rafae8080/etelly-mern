@@ -1,29 +1,47 @@
-// client/src/pages/ReportPage.jsx
 import ReportTile from "../components/admin/ReportTile";
 import { useState, useEffect } from "react";
 import { connectSocket } from "../utils/socket";
+import { TrendingUp, Search } from "lucide-react";
+
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
+const TABS = [
+  { key: "pending",  label: "Pending" },
+  { key: "ongoing",  label: "Ongoing" },
+  { key: "resolved", label: "Resolved" },
+  { key: "rejected", label: "Rejected" },
+];
+
+const getCurrentUser = () => {
+  try {
+    const stored = localStorage.getItem("user");
+    if (!stored) return "admin";
+    const u = JSON.parse(stored);
+    return u.name || u.email || "admin";
+  } catch {
+    return "admin";
+  }
+};
 
 export default function ReportsPage() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedType, setSelectedType] = useState("All");
+  const [activeTab, setActiveTab] = useState("pending");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  // Fetch reports when page loads
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     fetchReports();
 
     const socket = connectSocket();
-
-    socket.on("new_emergency_report", (newReport) => {
-      console.log("New report received:", newReport);
-      fetchReports(); // Refresh the list when new report comes
-    });
-
-    socket.on("report_updated", (data) => {
-      console.log("Report updated:", data);
-      fetchReports(); // Refresh the list when status changes
-    });
+    socket.on("new_emergency_report", () => fetchReports());
+    socket.on("report_updated", () => fetchReports());
 
     return () => {
       socket.off("new_emergency_report");
@@ -36,26 +54,12 @@ export default function ReportsPage() {
       setLoading(true);
       setError(null);
 
-      // Use localhost instead of 192.168.1.20
-      const response = await fetch("http://localhost:5000/api/reports", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("Response status:", response.status);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const response = await fetch(`${API_BASE}/api/reports`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      console.log("Data received:", data);
 
       if (data.success && data.reports) {
-        console.log("Number of reports:", data.reports.length);
-
         const formattedReports = data.reports.map((report) => ({
           id: report._id || report.id,
           type:
@@ -75,16 +79,18 @@ export default function ReportsPage() {
           imageUrl: report.images?.[0] || null,
           status: report.status || "pending",
           adminNotes: report.adminNotes || null,
+          resolvedBy: report.resolvedBy || null,
+          resolvedAt: report.resolvedAt || null,
+          resolutionNotes: report.resolutionNotes || null,
+          logs: report.logs || [],
         }));
 
         setReports(formattedReports);
       } else {
-        console.log("No reports found");
         setReports([]);
       }
-    } catch (error) {
-      console.error("Error fetching reports:", error);
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -92,59 +98,88 @@ export default function ReportsPage() {
 
   const updateReportStatus = async (reportId, status, adminNotes) => {
     try {
-      console.log("Updating report:", reportId, "to:", status);
-
-      const response = await fetch(
-        "http://localhost:5000/api/reports/update-status",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            reportId,
-            status,
-            adminNotes,
-            adminEmail: "admin@navotas.gov.ph",
-          }),
-        },
-      );
+      const response = await fetch(`${API_BASE}/api/reports/update-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportId,
+          status,
+          adminNotes,
+          adminEmail: getCurrentUser(),
+        }),
+      });
 
       const data = await response.json();
-      console.log("Update response:", data);
-
       if (data.success) {
-        alert(`Report ${status} successfully!`);
-        await fetchReports(); // Refresh the list after update
+        showToast(`Report ${status} successfully!`);
+        await fetchReports();
         return true;
       } else {
-        alert("Failed to update report status");
+        showToast("Failed to update report status", "error");
         return false;
       }
-    } catch (error) {
-      console.error("Error updating report:", error);
-      alert("Failed to update report");
+    } catch {
+      showToast("Failed to update report", "error");
       return false;
     }
   };
 
-  const totalReports = reports.length;
+  const resolveReport = async (reportId, resolvedBy, resolutionNotes) => {
+    const actingUser = resolvedBy?.trim() || getCurrentUser();
+    try {
+      const response = await fetch(`${API_BASE}/api/reports/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId, resolvedBy: actingUser, resolutionNotes }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast("Report marked as resolved!");
+        await fetchReports();
+        return true;
+      } else {
+        showToast("Failed to resolve report", "error");
+        return false;
+      }
+    } catch {
+      showToast("Failed to resolve report", "error");
+      return false;
+    }
+  };
+
+  const pendingCount  = reports.filter((r) => r.status === "pending").length;
+  const ongoingCount  = reports.filter((r) => r.status === "approved").length;
+  const resolvedCount = reports.filter((r) => r.status === "resolved").length;
+  const rejectedCount = reports.filter((r) => r.status === "rejected").length;
+
+  const tabCount = { pending: pendingCount, ongoing: ongoingCount, resolved: resolvedCount, rejected: rejectedCount };
+
+  const totalReports    = reports.length;
   const highPriorityCount = reports.filter((r) => r.severity === "high").length;
   const rescueNeededCount = reports.filter((r) => r.rescue === true).length;
-  const newTodayCount = reports.filter((r) => {
+  const newTodayCount   = reports.filter((r) => {
     if (!r.timestamp) return false;
-    const today = new Date().toDateString();
-    return new Date(r.timestamp).toDateString() === today;
+    return new Date(r.timestamp).toDateString() === new Date().toDateString();
   }).length;
 
-  const filteredReports = reports.filter(
-    (alert) => selectedType === "All" || alert.type === selectedType,
-  );
+  const filteredReports = reports.filter((r) => {
+    const tabMatch =
+      activeTab === "pending"  ? r.status === "pending"  :
+      activeTab === "ongoing"  ? r.status === "approved" :
+      activeTab === "resolved" ? r.status === "resolved" :
+      r.status === "rejected";
 
-  const getUniqueTypes = () => {
-    const types = reports.map((r) => r.type).filter(Boolean);
-    return ["All", ...new Set(types)];
-  };
+    if (!tabMatch) return false;
+    if (!search.trim()) return true;
+
+    const q = search.toLowerCase();
+    return (
+      r.type?.toLowerCase().includes(q) ||
+      r.description?.toLowerCase().includes(q) ||
+      (typeof r.location === "string" ? r.location : "").toLowerCase().includes(q) ||
+      r.reportedBy?.toLowerCase().includes(q)
+    );
+  });
 
   if (loading) {
     return (
@@ -172,15 +207,21 @@ export default function ReportsPage() {
 
   return (
     <div className="p-6">
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 bg-white px-6 py-3 rounded-lg shadow-lg border-l-4 ${
+            toast.type === "error" ? "border-red-600" : "border-green-600"
+          } max-w-md`}
+        >
+          <p className="text-gray-900 font-medium">{toast.msg}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Report Monitoring
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Active disaster emergency reports
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Report Monitoring</h1>
+          <p className="text-gray-600 mt-2">Active disaster emergency reports</p>
         </div>
         <div>
           <button
@@ -191,14 +232,16 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <p className="text-sm text-gray-600 mb-1">Total Reports</p>
           <p className="text-3xl font-bold text-gray-900">{totalReports}</p>
           {newTodayCount > 0 && (
-            <p className="text-sm text-blue-600 mt-2">
-              ↑ {newTodayCount} new today
+            <p className="text-sm text-blue-600 mt-2 flex items-center gap-1">
+              <TrendingUp size={13} />
+              {newTodayCount} new today
             </p>
           )}
         </div>
@@ -210,29 +253,52 @@ export default function ReportsPage() {
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <p className="text-sm text-gray-600 mb-1">Rescue Needed</p>
-          <p className="text-3xl font-bold text-orange-600">
-            {rescueNeededCount}
-          </p>
+          <p className="text-3xl font-bold text-orange-600">{rescueNeededCount}</p>
         </div>
       </div>
 
-      {/* Alert Tiles */}
+      {/* Reports list */}
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Recent Alerts</h2>
-          <div className="w-48">
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Reports</h2>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4 border-b border-gray-200">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === tab.key
+                  ? "border-red-500 text-red-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
             >
-              {getUniqueTypes().map((type) => (
-                <option key={type} value={type}>
-                  {type === "All" ? "All Categories" : type}
-                </option>
-              ))}
-            </select>
-          </div>
+              {tab.label}
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === tab.key
+                    ? "bg-red-100 text-red-600"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {tabCount[tab.key]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by type, location, description, or reporter…"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+          />
         </div>
 
         <div className="space-y-3">
@@ -240,16 +306,21 @@ export default function ReportsPage() {
             <div className="text-center py-12 bg-gray-50 rounded-lg">
               <p className="text-gray-500">No reports found</p>
               <p className="text-sm text-gray-400 mt-2">
-                Submit a report from the mobile app to see it here
+                {search.trim()
+                  ? "Try a different search term"
+                  : activeTab === "rejected"
+                  ? "No rejected reports"
+                  : "Submit a report from the mobile app to see it here"}
               </p>
             </div>
           ) : (
-            filteredReports.map((alert) => (
+            filteredReports.map((report) => (
               <ReportTile
-                key={alert.id}
-                {...alert}
+                key={report.id}
+                {...report}
                 onApprove={updateReportStatus}
                 onReject={updateReportStatus}
+                onResolve={resolveReport}
               />
             ))
           )}

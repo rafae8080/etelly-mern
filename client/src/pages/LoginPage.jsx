@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Shield } from "lucide-react";
 
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
@@ -16,7 +18,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -37,9 +39,8 @@ export default function LoginPage() {
           navigate("/dashboard");
         }
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred during login");
-      console.error(err);
       setIsLoading(false);
     }
   };

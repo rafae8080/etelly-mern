@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { X, Pencil, Trash2, UserCog, Copy, KeyRound } from "lucide-react";
 
+const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
 export default function ManageUsersPage() {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -57,13 +58,12 @@ export default function ManageUsersPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/users", {
+      const res = await fetch(`${API_BASE}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       setUsers(data);
-      setFilteredUsers(data);
     } catch (err) {
       showAlert("Failed to fetch users", "error");
     }
@@ -73,16 +73,12 @@ export default function ManageUsersPage() {
     fetchUsers();
   }, []);
 
-  // ===== SEARCH FILTER =====
-  useEffect(() => {
-    const filtered = users.filter(
-      (user) =>
-        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.role.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-    setFilteredUsers(filtered);
-  }, [searchQuery, users]);
+  const filteredUsers = users.filter(
+    (user) =>
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.role.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   // ===== HELPERS =====
   const showAlert = (message, type = "success") => {
@@ -126,7 +122,7 @@ export default function ManageUsersPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/users/${user._id}/reset-password`,
+        `${API_BASE}/api/users/${user._id}/reset-password`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -187,7 +183,7 @@ export default function ManageUsersPage() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/users", {
+      const res = await fetch(`${API_BASE}/api/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -215,7 +211,7 @@ export default function ManageUsersPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/users/${selectedUser._id}`,
+        `${API_BASE}/api/users/${selectedUser._id}`,
         {
           method: "PUT",
           headers: {
@@ -251,7 +247,7 @@ export default function ManageUsersPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/users/${userToDelete}`,
+        `${API_BASE}/api/users/${userToDelete}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
