@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "./layouts/AdminLayout";
+import InstallPrompt from "./components/pwa/InstallPrompt";
 
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -80,6 +81,7 @@ function ProtectedLayout({ Page }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <InstallPrompt />
       <Routes>
         {/* Root → login or dashboard depending on auth */}
         <Route path="/" element={<Navigate to="/login" replace />} />

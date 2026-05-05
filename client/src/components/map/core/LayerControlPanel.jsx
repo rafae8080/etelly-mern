@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Waves,
   Mountain,
-  Flame,
   MapPin,
   CircleDot,
   Wind,

@@ -1,22 +1,12 @@
-/**
- * useAlerts.js
- * Shared React hook — polls /api/alerts every 60 seconds.
- * Works in both the web app and the React Native mobile app
- * (replace the fetch URL with your production API base if needed).
- *
- * Usage:
- *   const { alerts, loading, error, dismiss, refresh } = useAlerts();
- */
-
 import { useState, useEffect, useCallback, useRef } from "react";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
-const POLL_INTERVAL = 60_000; // 60 seconds
+const POLL_INTERVAL = 60_000;
+const REFRESH_COOLDOWN = 60; // seconds
 
-// Severity order for sorting (most critical first)
-const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
+// rescue type always sorts first, then by severity
+const SEVERITY_ORDER = { evacuate: 0, warning: 1, watch: 2, critical: 3 };
 
-// Source badge colors (matches AlertsPage UI)
 export const SOURCE_CONFIG = {
   system: {
     label: "System",
@@ -29,6 +19,12 @@ export const SOURCE_CONFIG = {
     bg: "bg-green-50",
     text: "text-green-700",
     border: "border-green-200",
+  },
+  Barangay: {
+    label: "Barangay",
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    border: "border-emerald-200",
   },
   USGS: {
     label: "USGS",
@@ -68,7 +64,6 @@ export const SOURCE_CONFIG = {
   },
 };
 
-// Severity badge colors
 export const SEVERITY_CONFIG = {
   evacuate: {
     label: "EVACUATE",
@@ -77,14 +72,6 @@ export const SEVERITY_CONFIG = {
     border: "border-red-600",
     leftBorder: "border-red-600",
     icon: "🚨",
-  },
-  critical: {
-    label: "Critical",
-    bg: "bg-red-100",
-    text: "text-red-700",
-    border: "border-red-300",
-    leftBorder: "border-red-500",
-    icon: "⚠️",
   },
   warning: {
     label: "Warning",
@@ -104,12 +91,22 @@ export const SEVERITY_CONFIG = {
   },
 };
 
+export const RESCUE_CONFIG = {
+  label: "RESCUE",
+  bg: "bg-red-600",
+  text: "text-white",
+  border: "border-red-600",
+  leftBorder: "border-red-600",
+};
+
 export function useAlerts() {
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [alerts,      setAlerts]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
   const [lastFetched, setLastFetched] = useState(null);
-  const timerRef = useRef(null);
+  const [cooldownSecs, setCooldownSecs] = useState(0);
+  const timerRef    = useRef(null);
+  const cooldownRef = useRef(null);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -117,11 +114,12 @@ export function useAlerts() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
 
-      // Sort by severity then by time (newest first within same severity)
       const sorted = (data.alerts ?? []).sort((a, b) => {
+        // Rescue type always floats to the top
+        if (a.type === "rescue" && b.type !== "rescue") return -1;
+        if (b.type === "rescue" && a.type !== "rescue") return  1;
         const severityDiff =
-          (SEVERITY_ORDER[a.severity] ?? 99) -
-          (SEVERITY_ORDER[b.severity] ?? 99);
+          (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
         if (severityDiff !== 0) return severityDiff;
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
@@ -136,17 +134,14 @@ export function useAlerts() {
     }
   }, []);
 
-  // Initial fetch + polling
   useEffect(() => {
     fetchAlerts();
     timerRef.current = setInterval(fetchAlerts, POLL_INTERVAL);
     return () => clearInterval(timerRef.current);
   }, [fetchAlerts]);
 
-  // Dismiss an alert (soft-delete via PATCH)
   const dismiss = useCallback(
     async (alertId) => {
-      // Optimistic update
       setAlerts((prev) => prev.filter((a) => a._id !== alertId));
       try {
         await fetch(`${API_BASE}/api/alerts/${alertId}/dismiss`, {
@@ -154,28 +149,39 @@ export function useAlerts() {
           headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
         });
       } catch {
-        // If it fails, refetch to restore correct state
         fetchAlerts();
       }
     },
     [fetchAlerts],
   );
 
-  // Manual refresh
   const refresh = useCallback(() => {
+    if (cooldownSecs > 0) return;
     setLoading(true);
     fetchAlerts();
-  }, [fetchAlerts]);
 
-  // Counts by severity (useful for the HazardMapPage badge)
+    // Start cooldown countdown
+    clearInterval(cooldownRef.current);
+    setCooldownSecs(REFRESH_COOLDOWN);
+    let remaining = REFRESH_COOLDOWN;
+    cooldownRef.current = setInterval(() => {
+      remaining -= 1;
+      setCooldownSecs(remaining);
+      if (remaining <= 0) clearInterval(cooldownRef.current);
+    }, 1000);
+  }, [fetchAlerts, cooldownSecs]);
+
+  useEffect(() => () => clearInterval(cooldownRef.current), []);
+
   const counts = alerts.reduce(
     (acc, a) => {
-      acc[a.severity] = (acc[a.severity] ?? 0) + 1;
+      if (a.type === "rescue") acc.rescue = (acc.rescue ?? 0) + 1;
+      else acc[a.severity] = (acc[a.severity] ?? 0) + 1;
       acc.total += 1;
       return acc;
     },
-    { evacuate: 0, critical: 0, warning: 0, watch: 0, total: 0 },
+    { evacuate: 0, warning: 0, watch: 0, rescue: 0, total: 0 },
   );
 
-  return { alerts, loading, error, lastFetched, dismiss, refresh, counts };
+  return { alerts, loading, error, lastFetched, dismiss, refresh, cooldownSecs, counts };
 }

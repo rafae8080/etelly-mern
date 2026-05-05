@@ -2,7 +2,7 @@ import express from "express";
 import EvacuationCenter from "../models/EvacuationCenter.js";
 import EvacuationLog from "../models/EvacuationLog.js";
 import User from "../models/user.js";
-import { protect } from "../middleware/auth.js";
+import { protect, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -154,6 +154,76 @@ router.post("/centers/:id/reset", protect, async (req, res) => {
   } catch (err) {
     console.error("❌ Reset:", err.message);
     res.status(500).json({ message: "Failed to reset occupancy" });
+  }
+});
+
+// ── PUT /api/evacuation/centers/:id/availability ─────────────────────────────
+router.put("/centers/:id/availability", protect, requireAdmin, async (req, res) => {
+  try {
+    const userName = await resolveUserName(req);
+    const center = await EvacuationCenter.findById(req.params.id);
+    if (!center) return res.status(404).json({ message: "Center not found" });
+
+    const prev = center.available !== false;
+    const next = !!req.body.available;
+
+    center.available = next;
+    center.updatedBy = { userId: req.user.id, userName };
+    await center.save();
+
+    const log = await EvacuationLog.create({
+      centerId:      center._id,
+      centerName:    center.name,
+      barangay:      center.barangay,
+      action:        "availability_update",
+      previousValue: prev ? 1 : 0,
+      newValue:      next ? 1 : 0,
+      delta:         0,
+      user:          { id: req.user.id, name: userName },
+    });
+
+    req.app.get("io").emit("evacuation_updated", { center, log });
+    res.json({ center, log });
+  } catch (err) {
+    console.error("❌ Availability update:", err.message);
+    res.status(500).json({ message: "Failed to update availability" });
+  }
+});
+
+// ── POST /api/evacuation/centers (admin) ─────────────────────────────────────
+router.post("/centers", protect, requireAdmin, async (req, res) => {
+  try {
+    const userName = await resolveUserName(req);
+    const { name, location, barangay, capacity } = req.body;
+    if (!name?.trim() || !location?.trim() || !barangay || !capacity) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+    const cap = Math.max(1, parseInt(capacity, 10));
+    if (isNaN(cap)) return res.status(400).json({ message: "Invalid capacity" });
+
+    const center = await EvacuationCenter.create({
+      name:     name.trim(),
+      location: location.trim(),
+      barangay,
+      capacity: cap,
+    });
+
+    await EvacuationLog.create({
+      centerId:      center._id,
+      centerName:    center.name,
+      barangay:      center.barangay,
+      action:        "center_created",
+      previousValue: 0,
+      newValue:      cap,
+      delta:         0,
+      user:          { id: req.user.id, name: userName },
+    });
+
+    req.app.get("io").emit("evacuation_center_created", { center });
+    res.status(201).json(center);
+  } catch (err) {
+    console.error("❌ Create center:", err.message);
+    res.status(500).json({ message: "Failed to create center" });
   }
 });
 

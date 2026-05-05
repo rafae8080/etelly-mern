@@ -1,5 +1,6 @@
 // routes/alerts.js
 import express from "express";
+import mongoose from "mongoose";
 import Alert from "../models/Alert.js";
 import { protect } from "../middleware/auth.js";
 
@@ -45,48 +46,173 @@ router.get("/log", async (req, res) => {
   }
 });
 
-// POST /api/alerts — create a manual alert
+// POST /api/alerts — create a manual alert (also auto-creates a linked report)
 router.post("/", protect, async (req, res) => {
   try {
-    const { source, type, severity, title, description, location, barangays } =
-      req.body;
+    const { source, type, severity, title, description, location, barangays, lat, lng } = req.body;
 
     if (!title || !description || !severity) {
-      return res
-        .status(400)
-        .json({ error: "title, description, and severity are required" });
+      return res.status(400).json({ error: "title, description, and severity are required" });
     }
 
+    const isManual = ["admin", "barangay_official"].includes(req.user.role);
+    const effectiveSeverity = type === "rescue" ? "evacuate" : severity;
+
     const alert = await Alert.create({
-      source: source ?? "OCD",
-      type: type ?? "other",
-      severity,
+      source:   source ?? "CDRRMO",
+      type:     type ?? "other",
+      severity: effectiveSeverity,
       title,
       description,
       location: location ?? "Antipolo City, Rizal",
       barangays: barangays ?? [],
+      lat:      lat ?? null,
+      lng:      lng ?? null,
+      isManual,
       isActive: true,
-      expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
-      actionLog: [{ action: "created", by: req.user.name }],
+      // Manual alerts never expire — they must be dismissed/resolved manually
+      ...(isManual ? {} : { expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000) }),
+      actionLog: [{ action: "created", by: req.user.name ?? req.user.email ?? "admin" }],
     });
+
+    if (isManual) {
+      const db = mongoose.connection.db;
+      const severityMap = { evacuate: "high", warning: "medium", watch: "low" };
+      const reportDoc = {
+        emergencyType: type ?? "other",
+        severity:      severityMap[effectiveSeverity] ?? "medium",
+        description,
+        location:  { exactAddress: location ?? "Antipolo City, Rizal" },
+        latitude:  lat ?? null,
+        longitude: lng ?? null,
+        userName:  source ?? "CDRRMO",
+        timestamp: new Date(),
+        status:    "approved",
+        isAlertLinked: true,
+        linkedAlertId: alert._id,
+        images: [],
+        logs: [{
+          action: "approved",
+          by:     req.user.name ?? req.user.email ?? "admin",
+          at:     new Date().toISOString(),
+          notes:  "Auto-approved from manual alert creation",
+        }],
+      };
+
+      const result = await db.collection("emergency_reports").insertOne(reportDoc);
+      await Alert.findByIdAndUpdate(alert._id, { linkedReportId: result.insertedId });
+
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("new_emergency_report", { _id: result.insertedId, ...reportDoc });
+        io.emit("report_status_updated", {
+          reportId: result.insertedId.toString(),
+          status: "approved",
+          report: { _id: result.insertedId, ...reportDoc },
+        });
+      }
+    }
 
     res.status(201).json({ success: true, alert });
   } catch (err) {
+    console.error("❌ Create alert:", err.message);
     res.status(500).json({ error: "Failed to create alert" });
   }
 });
 
-// PATCH /api/alerts/:id/dismiss — soft-delete (hide) an alert
+// PATCH /api/alerts/:id/dismiss — soft-delete an alert + resolve its linked report
 router.patch("/:id/dismiss", protect, async (req, res) => {
   try {
-    await Alert.findByIdAndUpdate(req.params.id, {
-      isActive: false,
-      updatedAt: new Date(),
-      $push: { actionLog: { action: "dismissed", by: req.user.name } },
-    });
+    const actorName = req.user.name ?? req.user.email ?? "admin";
+    const alert = await Alert.findByIdAndUpdate(
+      req.params.id,
+      {
+        isActive: false,
+        updatedAt: new Date(),
+        $push: { actionLog: { action: "dismissed", by: actorName } },
+      },
+      { new: true },
+    );
+
+    if (alert?.linkedReportId) {
+      await mongoose.connection.db.collection("emergency_reports").updateOne(
+        { _id: alert.linkedReportId },
+        {
+          $set: {
+            status:           "resolved",
+            resolvedBy:       actorName,
+            resolvedAt:       new Date().toISOString(),
+            resolutionNotes:  "Alert was dismissed",
+          },
+          $push: {
+            logs: {
+              action: "resolved",
+              by:     actorName,
+              at:     new Date().toISOString(),
+              notes:  "Alert was dismissed",
+            },
+          },
+        },
+      );
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("report_updated",        { reportId: alert.linkedReportId.toString(), status: "resolved" });
+        io.emit("report_status_updated", { reportId: alert.linkedReportId.toString(), status: "resolved" });
+      }
+    }
+
     res.json({ ok: true });
   } catch (err) {
+    console.error("❌ Dismiss alert:", err.message);
     res.status(500).json({ error: "Failed to dismiss alert" });
+  }
+});
+
+// PATCH /api/alerts/:id/resolve — mark alert resolved + resolve linked report
+router.patch("/:id/resolve", protect, async (req, res) => {
+  try {
+    const actorName = req.user.name ?? req.user.email ?? "admin";
+    const alert = await Alert.findByIdAndUpdate(
+      req.params.id,
+      {
+        isActive: false,
+        updatedAt: new Date(),
+        $push: { actionLog: { action: "resolved", by: actorName } },
+      },
+      { new: true },
+    );
+
+    if (alert?.linkedReportId) {
+      await mongoose.connection.db.collection("emergency_reports").updateOne(
+        { _id: alert.linkedReportId },
+        {
+          $set: {
+            status:          "resolved",
+            resolvedBy:      actorName,
+            resolvedAt:      new Date().toISOString(),
+            resolutionNotes: req.body.notes ?? "Alert resolved",
+          },
+          $push: {
+            logs: {
+              action: "resolved",
+              by:     actorName,
+              at:     new Date().toISOString(),
+              notes:  req.body.notes ?? "Alert resolved",
+            },
+          },
+        },
+      );
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("report_updated",        { reportId: alert.linkedReportId.toString(), status: "resolved" });
+        io.emit("report_status_updated", { reportId: alert.linkedReportId.toString(), status: "resolved" });
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ Resolve alert:", err.message);
+    res.status(500).json({ error: "Failed to resolve alert" });
   }
 });
 

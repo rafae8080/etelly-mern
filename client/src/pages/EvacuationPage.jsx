@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Settings, Users, Building2, X, Check, RotateCcw,
-  ChevronDown, ClipboardList, ChevronUp, Loader2,
+  ChevronDown, ClipboardList, ChevronUp, Loader2, Plus,
 } from "lucide-react";
 import { connectSocket } from "../utils/socket";
 import buildingImg from "../images/building.png";
@@ -76,18 +76,29 @@ function describeLog(log) {
       return { actor: name, text: `changed capacity at "${log.centerName}"`,  detail: `${log.previousValue} → ${log.newValue}`             };
     case "reset":
       return { actor: name, text: `reset "${log.centerName}"`,                detail: `was ${log.previousValue}`                           };
+    case "availability_update":
+      return { actor: name, text: `marked "${log.centerName}" as ${log.newValue ? "available" : "unavailable"}`, detail: "" };
+    case "center_created":
+      return { actor: name, text: `added new center "${log.centerName}"`,     detail: `capacity: ${log.newValue}`                          };
     default:
       return { actor: name, text: `modified "${log.centerName}"`,             detail: ""                                                   };
   }
 }
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
-function EditModal({ center, onClose, onSaveCapacity, onReset }) {
-  const [cap, setCap] = useState(String(center.capacity));
+function EditModal({ center, onClose, onSaveCapacity, onReset, onToggleAvailability }) {
+  const [cap, setCap]       = useState(String(center.capacity));
+  const [isAvail, setIsAvail] = useState(center.available !== false);
 
   function submit() {
     const n = parseInt(cap, 10);
     if (!isNaN(n) && n > 0) onSaveCapacity(center._id, n);
+  }
+
+  function toggleAvailability() {
+    const next = !isAvail;
+    setIsAvail(next);
+    onToggleAvailability(center._id, next);
   }
 
   return (
@@ -98,6 +109,23 @@ function EditModal({ center, onClose, onSaveCapacity, onReset }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
         <p className="text-sm text-gray-500 mb-5 leading-snug">{center.name}</p>
+
+        {/* Availability toggle */}
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+          Availability
+        </label>
+        <button
+          onClick={toggleAvailability}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm font-semibold transition-colors mb-5
+            ${isAvail
+              ? "bg-green-50 border-green-200 text-green-700"
+              : "bg-red-50 border-red-200 text-red-600"}`}
+        >
+          <span>{isAvail ? "Available — open to evacuees" : "Unavailable — closed"}</span>
+          <div className={`relative w-10 h-5 rounded-full transition-colors ${isAvail ? "bg-green-500" : "bg-red-400"}`}>
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${isAvail ? "left-5" : "left-0.5"}`} />
+          </div>
+        </button>
 
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
           Total Capacity
@@ -129,6 +157,81 @@ function EditModal({ center, onClose, onSaveCapacity, onReset }) {
   );
 }
 
+// ── Create modal ──────────────────────────────────────────────────────────────
+function CreateModal({ currentBarangay, onClose, onCreate }) {
+  const [name,     setName]     = useState("");
+  const [location, setLocation] = useState("");
+  const [barangay, setBarangay] = useState(currentBarangay);
+  const [cap,      setCap]      = useState("100");
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState("");
+
+  async function submit() {
+    if (!name.trim() || !location.trim()) { setErr("Name and location are required."); return; }
+    const n = parseInt(cap, 10);
+    if (isNaN(n) || n < 1) { setErr("Capacity must be at least 1."); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      await onCreate({ name: name.trim(), location: location.trim(), barangay, capacity: n });
+    } catch {
+      setErr("Failed to create center. Try again.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-gray-900">Add Evacuation Center</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {err && <p className="text-xs text-red-600 mb-3">{err}</p>}
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Name</label>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Barangay Covered Court"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+        />
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location / Address</label>
+        <input
+          value={location} onChange={(e) => setLocation(e.target.value)}
+          placeholder="e.g. Barangay Compound"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+        />
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Barangay</label>
+        <select
+          value={barangay} onChange={(e) => setBarangay(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+        >
+          {BARANGAYS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+        </select>
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity</label>
+        <input
+          type="number" min={1} value={cap}
+          onChange={(e) => setCap(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-5"
+        />
+
+        <button
+          onClick={submit}
+          disabled={saving || !name.trim() || !location.trim()}
+          className="w-full bg-red-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? "Adding…" : "Add Center"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EvacuationPage() {
   const [barangay, setBarangay]   = useState("muntindilaw");
@@ -139,8 +242,9 @@ export default function EvacuationPage() {
   const [editId,   setEditId]     = useState(null);
   const [inputId,  setInputId]    = useState(null);
   const [inputVal, setInputVal]   = useState("");
-  const [logsOpen, setLogsOpen]   = useState(false);
-  const [brgyOpen, setBrgyOpen]   = useState(false);
+  const [logsOpen,    setLogsOpen]    = useState(false);
+  const [brgyOpen,    setBrgyOpen]    = useState(false);
+  const [createOpen,  setCreateOpen]  = useState(false);
 
   // ── Fetch centers + logs ────────────────────────────────────────────────────
   const fetchCenters = useCallback(async (brgy) => {
@@ -259,14 +363,40 @@ export default function EvacuationPage() {
     setEditId(null);
   }
 
+  async function handleToggleAvailability(id, available) {
+    setCenters((prev) => prev.map((x) => x._id === id ? { ...x, available } : x));
+    try {
+      await apiFetch(`/api/evacuation/centers/${id}/availability`, {
+        method: "PUT",
+        body: JSON.stringify({ available }),
+      });
+      fetchLogs(barangay);
+    } catch {
+      fetchCenters(barangay);
+    }
+  }
+
+  async function handleCreateCenter(data) {
+    const center = await apiFetch("/api/evacuation/centers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (center.barangay === barangay) {
+      setCenters((prev) => [...prev, center]);
+    }
+    fetchLogs(barangay);
+    setCreateOpen(false);
+  }
+
   // ── Derived stats ───────────────────────────────────────────────────────────
   const totalCap    = centers.reduce((s, c) => s + c.capacity, 0);
   const totalOcc    = centers.reduce((s, c) => s + c.occupancy, 0);
   const activeCount = centers.filter((c) => c.occupancy > 0).length;
   const vacantCount = centers.filter((c) => c.occupancy === 0).length;
 
-  // Sort: Active (1) → Near Full (2) → Full (3) → Vacant (4)
+  // Sort: Active (1) → Near Full (2) → Full (3) → Vacant (4) → Unavailable (5)
   function sortPriority(c) {
+    if (c.available === false) return 5;
     if (c.occupancy === 0 || c.capacity <= 0) return 4;
     const p = c.occupancy / c.capacity;
     if (p >= 1)   return 3;
@@ -290,6 +420,18 @@ export default function EvacuationPage() {
           <h1 className="text-3xl font-bold text-gray-900">Evacuation Centers</h1>
           <p className="text-sm text-gray-500 mt-1">Antipolo City — {brgyLabel} Pilot Tracking</p>
         </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Add Center — admin only */}
+          {isAdmin && (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors"
+            >
+              <Plus size={14} />
+              Add Center
+            </button>
+          )}
 
         {/* Barangay selector */}
         <div className="relative shrink-0">
@@ -317,6 +459,7 @@ export default function EvacuationPage() {
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -355,10 +498,15 @@ export default function EvacuationPage() {
             const p = c.capacity > 0 ? Math.min(100, Math.round((c.occupancy / c.capacity) * 100)) : 0;
             const isEditing = inputId === c._id;
 
+            const unavailable = c.available === false;
+
             return (
               <div
                 key={c._id}
-                className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all p-4"
+                className={`rounded-xl border transition-all p-4
+                  ${unavailable
+                    ? "bg-gray-50 border-gray-200 opacity-70"
+                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
               >
                 <div className="flex items-start gap-3">
                   {/* Image */}
@@ -380,9 +528,15 @@ export default function EvacuationPage() {
                         <p className="text-xs text-gray-400">{c.location}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
-                          {s.label}
-                        </span>
+                        {unavailable ? (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                            Unavailable
+                          </span>
+                        ) : (
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
+                            {s.label}
+                          </span>
+                        )}
                         <button
                           onClick={() => setEditId(c._id)}
                           className="text-gray-300 hover:text-gray-500 transition-colors"
@@ -523,6 +677,16 @@ export default function EvacuationPage() {
           onClose={() => setEditId(null)}
           onSaveCapacity={handleSaveCapacity}
           onReset={handleReset}
+          onToggleAvailability={handleToggleAvailability}
+        />
+      )}
+
+      {/* Create modal — admin only */}
+      {createOpen && (
+        <CreateModal
+          currentBarangay={barangay}
+          onClose={() => setCreateOpen(false)}
+          onCreate={handleCreateCenter}
         />
       )}
     </div>

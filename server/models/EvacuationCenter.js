@@ -8,6 +8,7 @@ const schema = new mongoose.Schema(
     capacity:  { type: Number, required: true, min: 1, default: 100 },
     occupancy: { type: Number, default: 0, min: 0 },
     imageUrl:  { type: String, default: "" },
+    available: { type: Boolean, default: true },
     updatedBy: {
       userId:   mongoose.Schema.Types.ObjectId,
       userName: String,

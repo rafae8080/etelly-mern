@@ -21,7 +21,7 @@ function fmtTime(ts) {
 }
 
 export default function AlertsPage() {
-  const { alerts, loading, error, lastFetched, dismiss, refresh, counts } =
+  const { alerts, loading, error, lastFetched, dismiss, refresh, cooldownSecs, counts } =
     useAlerts();
 
   const stored = localStorage.getItem("user");
@@ -45,9 +45,9 @@ export default function AlertsPage() {
   }, []);
 
   const filtered =
-    activeFilter === "all"
-      ? alerts
-      : alerts.filter((a) => a.severity === activeFilter);
+    activeFilter === "all"     ? alerts :
+    activeFilter === "rescue"  ? alerts.filter((a) => a.type === "rescue") :
+    alerts.filter((a) => a.type !== "rescue" && a.severity === activeFilter);
 
   const handleDismissConfirm = () => {
     if (pendingDismiss) {
@@ -73,19 +73,29 @@ export default function AlertsPage() {
           </p>
           {lastFetched && (
             <p className="text-xs text-gray-400 mt-0.5 font-mono">
-              Updated {timeAgo(lastFetched)}
+              Last updated at{" "}
+              {new Date(lastFetched).toLocaleTimeString("en-PH", {
+                timeZone: "Asia/Manila",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {" · "}{timeAgo(lastFetched)}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={refresh}
-            className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center
-                       text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-            title="Refresh alerts"
+            onClick={cooldownSecs > 0 ? undefined : refresh}
+            disabled={cooldownSecs > 0}
+            title={cooldownSecs > 0 ? `Refresh in ${cooldownSecs}s` : "Refresh alerts"}
+            className={`w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center
+                        transition-colors
+                        ${cooldownSecs > 0
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading && cooldownSecs === 0 ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => setShowModal(true)}
