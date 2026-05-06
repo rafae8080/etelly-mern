@@ -7,7 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
       includeAssets: ["icons/icon.png"],
+      // ---- START OF TEST LINE — delete before deploying to production
+      devOptions: { enabled: true, type: "module" },
+      // ---- END OF TEST LINE — delete up to here
       manifest: {
         name: "E-Telly: Disaster Preparedness & Resource Sharing",
         short_name: "E-Telly",
@@ -34,44 +40,6 @@ export default defineConfig({
         ],
         categories: ["utilities", "productivity"],
         lang: "en-PH",
-      },
-      workbox: {
-        // Cache the app shell (JS, CSS, HTML) — Cache First
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-
-        // Runtime caching rules
-        runtimeCaching: [
-          // API: alerts + reports — Network First (show live data, fall back to cache)
-          {
-            urlPattern: /\/api\/(alerts|reports)/,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-              networkTimeoutSeconds: 5,
-            },
-          },
-          // OpenStreetMap / CartoCDN tiles — Stale While Revalidate
-          {
-            urlPattern:
-              /^https:\/\/(.*\.tile\.openstreetmap\.org|.*\.basemaps\.cartocdn\.com|server\.arcgisonline\.com)/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "map-tiles",
-              expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
-            },
-          },
-          // Nominatim geocoding — Network First
-          {
-            urlPattern: /nominatim\.openstreetmap\.org/,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "geocoding-cache",
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 },
-              networkTimeoutSeconds: 8,
-            },
-          },
-        ],
       },
     }),
   ],

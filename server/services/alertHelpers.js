@@ -1,4 +1,5 @@
 import Alert from "../models/Alert.js";
+import { sendPushToAll } from "../routes/push.js";
 
 export function toDateKey() {
   const d = new Date();
@@ -22,17 +23,39 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const SEVERITY_PREFIX = {
+  evacuate: "🔴 EVACUATE",
+  critical: "🔴 Critical Alert",
+  warning:  "⚠️ Warning",
+  watch:    "👁️ Watch",
+  advisory: "ℹ️ Advisory",
+};
+
 export async function upsertAlert({ _dedupeKey, source, ...alertData }) {
-  await Alert.findOneAndUpdate(
+  const result = await Alert.updateOne(
     { _dedupeKey, isActive: true },
     {
       $set: { ...alertData, source, _dedupeKey, updatedAt: new Date() },
       $setOnInsert: { createdAt: new Date(), isActive: true },
     },
-    { upsert: true, new: true },
+    { upsert: true },
   );
+  return result.upsertedCount > 0; // true = brand-new alert
 }
 
 export async function upsertSystemAlert(data) {
-  return upsertAlert({ ...data, source: "system" });
+  const isNew = await upsertAlert({ ...data, source: "system" });
+
+  if (isNew) {
+    const prefix = SEVERITY_PREFIX[data.severity] ?? "⚠️ Alert";
+    sendPushToAll({
+      title:  `${prefix}: ${data.title}`,
+      body:   data.description.slice(0, 100),
+      url:    "/alerts",
+      tag:    `system-${data._dedupeKey}`,
+      urgent: data.severity === "evacuate" || data.severity === "critical",
+    }).catch((err) => console.error("[Push] System alert push failed:", err.message));
+  }
+
+  return isNew;
 }

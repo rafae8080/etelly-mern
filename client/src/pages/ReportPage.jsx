@@ -155,8 +155,9 @@ export default function ReportsPage() {
   const tabCount = { pending: pendingCount, ongoing: ongoingCount, resolved: resolvedCount, rejected: rejectedCount };
 
   const totalReports    = reports.length;
-  const highPriorityCount = reports.filter((r) => r.severity === "high").length;
-  const rescueNeededCount = reports.filter((r) => r.rescue === true).length;
+  const activeReports     = reports.filter((r) => r.status === "pending" || r.status === "approved");
+  const highPriorityCount = activeReports.filter((r) => r.severity === "high").length;
+  const rescueNeededCount = activeReports.filter((r) => r.rescue === true).length;
   const newTodayCount   = reports.filter((r) => {
     if (!r.timestamp) return false;
     return new Date(r.timestamp).toDateString() === new Date().toDateString();

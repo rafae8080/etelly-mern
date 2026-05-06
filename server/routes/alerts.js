@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Alert from "../models/Alert.js";
 import { protect } from "../middleware/auth.js";
+import { sendPushToAll } from "./push.js";
 
 const router = express.Router();
 
@@ -74,6 +75,19 @@ router.post("/", protect, async (req, res) => {
       ...(isManual ? {} : { expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000) }),
       actionLog: [{ action: "created", by: req.user.name ?? req.user.email ?? "admin" }],
     });
+
+    // Emit socket + push notification to all subscribers
+    const io = req.app.get("io");
+    io?.emit("new_alert", alert.toObject());
+
+    const isRescue = type === "rescue";
+    sendPushToAll({
+      title: isRescue ? "🚨 Rescue Alert" : `⚠️ ${title}`,
+      body:  description,
+      url:   "/alerts",
+      tag:   `alert-${alert._id}`,
+      urgent: isRescue,
+    }).catch((err) => console.error("[Push] sendPushToAll failed:", err));
 
     if (isManual) {
       const db = mongoose.connection.db;
