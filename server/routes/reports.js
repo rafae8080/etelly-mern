@@ -2,6 +2,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { ObjectId } from "mongodb";
+import { sendPushToAll } from "./push.js";
 
 const router = express.Router();
 
@@ -88,6 +89,19 @@ router.post("/create", async (req, res) => {
         ...reportData,
       });
     }
+
+    // Push notification to all subscribers
+    const emergencyType = reportData.emergencyType || "Emergency";
+    const severity = reportData.severity ? ` (${reportData.severity})` : "";
+    const locationLabel =
+      reportData.location?.address || reportData.location?.barangay || "Unknown location";
+    sendPushToAll({
+      title: `New Report: ${emergencyType}${severity}`,
+      body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
+      url: "/reports",
+      tag: `report-${result.insertedId}`,
+      urgent: true,
+    }).catch((err) => console.error("[Push] Report notification failed:", err));
 
     res.json({
       success: true,

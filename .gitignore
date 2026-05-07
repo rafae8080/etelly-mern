@@ -31,4 +31,5 @@ DOCUMENTATION.md
 *.sln
 *.sw?
 
+server\.env
 .env
