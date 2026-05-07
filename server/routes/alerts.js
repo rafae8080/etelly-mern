@@ -10,7 +10,11 @@ const router = express.Router();
 // GET /api/alerts — fetch all active alerts, sorted by severity then time
 router.get("/", async (req, res) => {
   try {
-    const alerts = await Alert.find({ isActive: true })
+    const now = new Date();
+    const alerts = await Alert.find({
+      isActive: true,
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    })
       .sort({ createdAt: -1 })
       .limit(50);
     res.json({ alerts, generatedAt: new Date().toISOString() });

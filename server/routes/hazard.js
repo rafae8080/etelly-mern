@@ -224,6 +224,7 @@ router.get("/typhoon", async (req, res) => {
 
         return {
           id:              xmlText(item, "gdacs:eventid")   ?? "unknown",
+          episodeid:       xmlText(item, "gdacs:episodeid") ?? null,
           name:            xmlText(item, "gdacs:eventname") ?? "Unnamed Storm",
           lat, lon,
           alertLevel:      (xmlText(item, "gdacs:alertlevel") ?? "green").toLowerCase(),
@@ -244,7 +245,7 @@ router.get("/typhoon", async (req, res) => {
     const storms = await Promise.all(
       rawStorms.map(async (storm) => ({
         ...storm,
-        forecastTrack: await fetchForecastTrack(storm.id),
+        forecastTrack: await fetchForecastTrack(storm.id, storm.episodeid),
       })),
     );
 
@@ -258,62 +259,78 @@ router.get("/typhoon", async (req, res) => {
 });
 
 // ── GDACS per-event forecast track ───────────────────────────────────────────
-// GDACS provides a GeoJSON endpoint per event that includes future forecast
-// positions as either a LineString feature or a sequence of dated Point features.
-// Both shapes are tried; returns [] if track data is unavailable or the fetch fails.
-async function fetchForecastTrack(eventId) {
+// Track data is cached separately (6-hour TTL) so a single successful fetch
+// survives many typhoon cache misses — GDACS in Europe is slow/unreliable from PH.
+async function fetchForecastTrack(eventId, episodeId) {
+  const trackCacheKey = `track_${eventId}_${episodeId}`;
+
+  // Return cached track if still fresh (avoids hitting GDACS on every 5-min miss)
+  const cachedTrack = getCached(trackCacheKey);
+  if (cachedTrack) return cachedTrack;
+
+  if (!episodeId) return [];
+
   try {
     const url =
-      `https://www.gdacs.org/gdacsapi/api/events/geteventdata` +
-      `?eventtype=TC&eventid=${eventId}`;
+      `https://www.gdacs.org/contentdata/resources/TC/${eventId}` +
+      `/geojson_${eventId}_${episodeId}.geojson`;
     const res = await fetch(url, {
-      headers: { Accept: "application/json, application/geo+json" },
-      signal: AbortSignal.timeout(8000),
+      headers: { Accept: "*/*" },
+      signal: AbortSignal.timeout(22000),
     });
-    if (!res.ok) return [];
-    const geojson = await res.json();
 
-    const features =
-      geojson.features ??
-      (geojson.type === "Feature" ? [geojson] : []);
-
-    // Shape A: LineString geometry is the full track
-    const line = features.find((f) => f.geometry?.type === "LineString");
-    if (line) {
-      const pts = line.geometry.coordinates
-        .map(([lon, lat]) => ({ lat, lon }))
-        .filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
-      if (pts.length >= 2) return pts;
+    if (!res.ok) {
+      console.warn(`[Track] GeoJSON status ${res.status} for ${eventId}`);
+      return getCachedStale(trackCacheKey) ?? [];
     }
 
-    // Shape B: sequence of Point features sorted by date
-    const pts = features
-      .filter((f) => f.geometry?.type === "Point" && f.properties?.fromdate)
-      .sort(
-        (a, b) =>
-          new Date(a.properties.fromdate) - new Date(b.properties.fromdate),
-      )
-      .map((f) => ({
-        lat: f.geometry.coordinates[1],
-        lon: f.geometry.coordinates[0],
-      }))
-      .filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
-    if (pts.length >= 2) return pts;
+    const geojson = await res.json();
+    const features = geojson.features ?? [];
 
-    return [];
-  } catch {
-    return [];
+    const pts = features
+      .filter((f) => {
+        if (f.geometry?.type !== "Point") return false;
+        const cls = f.properties?.Class ?? "";
+        return /^Point_\d+$/.test(cls);
+      })
+      .sort((a, b) => {
+        const n = (f) => parseInt(f.properties.Class.replace("Point_", ""), 10);
+        return n(a) - n(b);
+      })
+      .map((f) => {
+        const p = f.properties ?? {};
+        const isPast = p.polygonlabel === "previous position";
+        const windKph = p.windspeed ? Math.round(parseFloat(p.windspeed)) : null;
+        return {
+          lat:       f.geometry.coordinates[1],
+          lon:       f.geometry.coordinates[0],
+          label:     p.polygonlabel ?? "",
+          trackdate: isPast ? null : (p.trackdate ?? null),
+          windKph:   isPast ? null : windKph,
+          windGusts: isPast ? null : (p.windgusts ? Math.round(parseFloat(p.windgusts)) : null),
+          category:  isPast ? null : classifyTyphoon(windKph ?? 0),
+        };
+      })
+      .filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
+
+    if (pts.length >= 2) {
+      setCached(trackCacheKey, pts, 6 * 60 * 60 * 1000);
+      return pts;
+    }
+  } catch (err) {
+    console.warn(`[Track] Fetch failed (${err.message}) — using stale cache if available`);
+    return getCachedStale(trackCacheKey) ?? [];
   }
+
+  return [];
 }
 
 function classifyTyphoon(windKph) {
-  if (windKph >= 220) return { label: "Super Typhoon",          color: "#7c3aed", level: 5 };
-  if (windKph >= 185) return { label: "Typhoon (TY)",           color: "#dc2626", level: 4 };
-  if (windKph >= 118) return { label: "Typhoon (TY)",           color: "#ef4444", level: 4 };
-  if (windKph >= 89)  return { label: "Severe Tropical Storm",  color: "#f97316", level: 3 };
-  if (windKph >= 62)  return { label: "Tropical Storm",         color: "#f59e0b", level: 2 };
-  if (windKph >= 35)  return { label: "Tropical Depression",    color: "#3b82f6", level: 1 };
-  return                     { label: "Tropical Disturbance",   color: "#9ca3af", level: 0 };
+  if (windKph >= 185) return { label: "Super Typhoon (STY)",        color: "#7c3aed", level: 5 };
+  if (windKph >= 118) return { label: "Typhoon (TY)",               color: "#dc2626", level: 4 };
+  if (windKph >= 89)  return { label: "Severe Tropical Storm (STS)",color: "#f97316", level: 3 };
+  if (windKph >= 62)  return { label: "Tropical Storm (TS)",        color: "#f59e0b", level: 2 };
+  return                     { label: "Tropical Depression (TD)",   color: "#3b82f6", level: 1 };
 }
 
 function estimateWindRadius(windKph) {

@@ -16,7 +16,7 @@ dist-ssr
 .claude/
 CLAUDE.md
 
-
+SYSTEM_OVERVIEW.md
 DEPLOYMENT.md
 DOCUMENTATION.md
 

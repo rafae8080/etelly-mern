@@ -86,6 +86,19 @@ function FlyToUser({ trigger, userPos }) {
   return null;
 }
 
+function FlyToTarget({ target }) {
+  const map = useMap();
+  const prevTarget = useRef(null);
+
+  useEffect(() => {
+    if (!target || target === prevTarget.current) return;
+    prevTarget.current = target;
+    map.flyTo([target.lat, target.lon], 8, { duration: 1.4 });
+  }, [target, map]);
+
+  return null;
+}
+
 function InvalidateSizeOnChange({ trigger }) {
   const map = useMap();
   useEffect(() => {
@@ -137,6 +150,8 @@ export default function HazardMapPage() {
     isOffline: false,
     cachedAt: null,
   });
+
+  const [stormFlyTarget, setStormFlyTarget] = useState(null);
 
   const [reportFilters, setReportFilters] = useState({ types: ["all"] });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -253,6 +268,7 @@ export default function HazardMapPage() {
         <EvacuationCentersLayer visible={layers.evacuation} />
         <UserLocationMarker onLocated={setUserPos} />
         <FlyToUser trigger={flyTrigger} userPos={userPos} />
+        <FlyToTarget target={stormFlyTarget} />
         <MapStatusBar />
         <MapReadyHandler onReady={() => setLoading(false)} />
         <InvalidateSizeOnChange trigger={isFullscreen} />
@@ -339,6 +355,7 @@ export default function HazardMapPage() {
           onToggle={() => togglePopup("typhoon")}
           topStyle={btnStyle("typhoon")}
           onOfflineChange={handleOfflineChange}
+          onFlyTo={(lat, lon) => setStormFlyTarget({ lat, lon, t: Date.now() })}
         />
       )}
 

@@ -28,13 +28,13 @@ const TYPHOON_LEGEND = {
   label: "Typhoon",
   Icon: Wind,
   iconColor: "text-cyan-500",
-  note: "GDACS · JMA Tokyo storm classification",
+  note: "GDACS data · PAGASA 2022 classification",
   rows: [
-    { color: "#7c3aed", label: "Super Typhoon ≥220 km/h" },
-    { color: "#dc2626", label: "Typhoon 118–219 km/h" },
-    { color: "#f97316", label: "Severe Tropical Storm 63–117 km/h" },
-    { color: "#f59e0b", label: "Tropical Storm 39–62 km/h" },
-    { color: "#3b82f6", label: "Tropical Depression <39 km/h" },
+    { color: "#7c3aed", label: "Super Typhoon (STY) ≥185 km/h" },
+    { color: "#dc2626", label: "Typhoon (TY) 118–184 km/h" },
+    { color: "#f97316", label: "Severe Tropical Storm (STS) 89–117 km/h" },
+    { color: "#f59e0b", label: "Tropical Storm (TS) 62–88 km/h" },
+    { color: "#3b82f6", label: "Tropical Depression (TD) <62 km/h" },
   ],
 };
 
