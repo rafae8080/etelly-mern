@@ -1,12 +1,50 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { connectSocket } from "../utils/socket";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 const POLL_INTERVAL = 60_000;
-const REFRESH_COOLDOWN = 60; // seconds
+const REFRESH_COOLDOWN = 10; // seconds — anti-spam only, not rate-limiting
 
 // rescue type always sorts first, then by severity
-const SEVERITY_ORDER = { evacuate: 0, warning: 1, watch: 2, critical: 3 };
+const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
 
+// ── IndexedDB alert cache ─────────────────────────────────────────────────────
+const IDB_NAME  = "etelly-alerts-cache";
+const IDB_STORE = "alerts";
+
+function openAlertsDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess  = (e) => resolve(e.target.result);
+    req.onerror    = ()  => reject();
+  });
+}
+
+async function readAlertsCache() {
+  try {
+    const db = await openAlertsDB();
+    return await new Promise((resolve) => {
+      const req = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get("latest");
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror   = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function writeAlertsCache(alerts) {
+  try {
+    const db = await openAlertsDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put({ alerts, cachedAt: Date.now() }, "latest");
+      tx.oncomplete = resolve;
+      tx.onerror    = resolve;
+    });
+  } catch { /* non-critical */ }
+}
+
+// ── Exports ───────────────────────────────────────────────────────────────────
 export const SOURCE_CONFIG = {
   system: {
     label: "System",
@@ -73,6 +111,14 @@ export const SEVERITY_CONFIG = {
     leftBorder: "border-red-600",
     icon: "🚨",
   },
+  critical: {
+    label: "Critical",
+    bg: "bg-red-100",
+    text: "text-red-700",
+    border: "border-red-300",
+    leftBorder: "border-red-500",
+    icon: "🔴",
+  },
   warning: {
     label: "Warning",
     bg: "bg-amber-100",
@@ -100,13 +146,24 @@ export const RESCUE_CONFIG = {
 };
 
 export function useAlerts() {
-  const [alerts,      setAlerts]      = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState(null);
-  const [lastFetched, setLastFetched] = useState(null);
+  const [alerts,       setAlerts]       = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [isStale,      setIsStale]      = useState(false);
+  const [lastFetched,  setLastFetched]  = useState(null);
   const [cooldownSecs, setCooldownSecs] = useState(0);
   const timerRef    = useRef(null);
   const cooldownRef = useRef(null);
+
+  function sortAlerts(raw) {
+    return (raw ?? []).slice().sort((a, b) => {
+      if (a.type === "rescue" && b.type !== "rescue") return -1;
+      if (b.type === "rescue" && a.type !== "rescue") return  1;
+      const diff = (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
+      if (diff !== 0) return diff;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -114,30 +171,59 @@ export function useAlerts() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
 
-      const sorted = (data.alerts ?? []).sort((a, b) => {
-        // Rescue type always floats to the top
-        if (a.type === "rescue" && b.type !== "rescue") return -1;
-        if (b.type === "rescue" && a.type !== "rescue") return  1;
-        const severityDiff =
-          (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
-        if (severityDiff !== 0) return severityDiff;
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      });
-
+      const sorted = sortAlerts(data.alerts);
       setAlerts(sorted);
       setError(null);
+      setIsStale(false);
       setLastFetched(new Date());
+      writeAlertsCache(sorted); // fire-and-forget
     } catch (err) {
-      setError(err.message);
+      // Network failed — try the local cache so the user still sees data
+      const cached = await readAlertsCache();
+      if (cached?.alerts?.length) {
+        setAlerts(cached.alerts);
+        setIsStale(true);
+        setError(null);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Show cached alerts immediately while the fresh fetch is in flight
+    readAlertsCache().then((cached) => {
+      if (cached?.alerts?.length) {
+        setAlerts(cached.alerts);
+        setIsStale(true);
+        setLoading(false);
+      }
+    });
+
     fetchAlerts();
     timerRef.current = setInterval(fetchAlerts, POLL_INTERVAL);
-    return () => clearInterval(timerRef.current);
+
+    // Real-time: socket events update instantly without waiting for the next poll
+    const socket = connectSocket();
+    socket.on("new_alert",     fetchAlerts);
+    socket.on("alert_updated", fetchAlerts);
+
+    // Reconnect: refresh immediately when coming back online
+    const handleOnline  = () => fetchAlerts();
+    // Mark stale immediately on disconnect so the UI doesn't wait up to 60s
+    const handleOffline = () => setIsStale(true);
+    window.addEventListener("online",  handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      clearInterval(timerRef.current);
+      socket.off("new_alert",     fetchAlerts);
+      socket.off("alert_updated", fetchAlerts);
+      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, [fetchAlerts]);
 
   const dismiss = useCallback(
@@ -160,7 +246,11 @@ export function useAlerts() {
     setLoading(true);
     fetchAlerts();
 
-    // Start cooldown countdown
+    // Reset the poll timer so the next auto-poll is a full 60s from now
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(fetchAlerts, POLL_INTERVAL);
+
+    // Short anti-spam cooldown
     clearInterval(cooldownRef.current);
     setCooldownSecs(REFRESH_COOLDOWN);
     let remaining = REFRESH_COOLDOWN;
@@ -180,8 +270,8 @@ export function useAlerts() {
       acc.total += 1;
       return acc;
     },
-    { evacuate: 0, warning: 0, watch: 0, rescue: 0, total: 0 },
+    { evacuate: 0, critical: 0, warning: 0, watch: 0, rescue: 0, total: 0 },
   );
 
-  return { alerts, loading, error, lastFetched, dismiss, refresh, cooldownSecs, counts };
+  return { alerts, loading, error, isStale, lastFetched, dismiss, refresh, cooldownSecs, counts };
 }

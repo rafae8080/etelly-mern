@@ -8,6 +8,57 @@ const router = express.Router();
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SEED = [
+  // Barangay Bagong Nayon
+  { barangay: "bagongnayon", name: "Bagong Nayon Elementary School",      location: "Bagong Nayon",          capacity: 400 },
+  { barangay: "bagongnayon", name: "Barangay Hall",                       location: "Bagong Nayon",          capacity: 150 },
+  { barangay: "bagongnayon", name: "Barangay Covered Court",              location: "Bagong Nayon",          capacity: 200 },
+  { barangay: "bagongnayon", name: "Bagong Nayon National High School",   location: "Bagong Nayon",          capacity: 500 },
+
+  // Barangay Beverly Hills
+  { barangay: "beverlyhills", name: "Beverly Hills Elementary School",    location: "Beverly Hills",         capacity: 350 },
+  { barangay: "beverlyhills", name: "Barangay Hall",                      location: "Beverly Hills",         capacity: 150 },
+  { barangay: "beverlyhills", name: "Barangay Covered Court",             location: "Beverly Hills",         capacity: 200 },
+
+  // Barangay Calawis
+  { barangay: "calawis", name: "Calawis Elementary School",               location: "Calawis",               capacity: 300 },
+  { barangay: "calawis", name: "Barangay Hall",                           location: "Calawis",               capacity: 100 },
+  { barangay: "calawis", name: "Barangay Covered Court",                  location: "Calawis",               capacity: 150 },
+
+  // Barangay Cupang
+  { barangay: "cupang", name: "Cupang National High School",              location: "Cupang",                capacity: 500 },
+  { barangay: "cupang", name: "Cupang Elementary School",                 location: "Cupang",                capacity: 400 },
+  { barangay: "cupang", name: "Barangay Hall",                            location: "Cupang",                capacity: 150 },
+  { barangay: "cupang", name: "Barangay Covered Court",                   location: "Cupang",                capacity: 200 },
+  { barangay: "cupang", name: "Cupang Daycare Center",                    location: "Cupang",                capacity: 80  },
+
+  // Barangay Dalig
+  { barangay: "dalig", name: "Dalig Elementary School",                   location: "Dalig",                 capacity: 350 },
+  { barangay: "dalig", name: "Barangay Hall",                             location: "Dalig",                 capacity: 150 },
+  { barangay: "dalig", name: "Barangay Covered Court",                    location: "Dalig",                 capacity: 200 },
+
+  // Barangay Dela Paz
+  { barangay: "delapaz", name: "Dela Paz National High School",           location: "Dela Paz",              capacity: 600 },
+  { barangay: "delapaz", name: "Dela Paz Elementary School",              location: "Dela Paz",              capacity: 400 },
+  { barangay: "delapaz", name: "Barangay Hall",                           location: "Dela Paz",              capacity: 150 },
+  { barangay: "delapaz", name: "Barangay Covered Court",                  location: "Dela Paz",              capacity: 200 },
+  { barangay: "delapaz", name: "Dela Paz Daycare Center",                 location: "Dela Paz",              capacity: 80  },
+
+  // Barangay Inarawan
+  { barangay: "inarawan", name: "Inarawan Elementary School",             location: "Inarawan",              capacity: 300 },
+  { barangay: "inarawan", name: "Barangay Hall",                          location: "Inarawan",              capacity: 100 },
+  { barangay: "inarawan", name: "Barangay Covered Court",                 location: "Inarawan",              capacity: 150 },
+
+  // Barangay Mambugan
+  { barangay: "mambugan", name: "Mambugan Elementary School",             location: "Mambugan",              capacity: 350 },
+  { barangay: "mambugan", name: "Mambugan National High School",          location: "Mambugan",              capacity: 500 },
+  { barangay: "mambugan", name: "Barangay Hall",                          location: "Mambugan",              capacity: 150 },
+  { barangay: "mambugan", name: "Barangay Covered Court",                 location: "Mambugan",              capacity: 200 },
+
+  // Barangay Mayamot
+  { barangay: "mayamot", name: "Kingsville Evacuation Center (City Manage)", location: "Kingsville Subd.",  capacity: 200 },
+  { barangay: "mayamot", name: "Mayamot Elementary School Covered Court",    location: "147 Sumulong Hi-way",capacity: 300 },
+  { barangay: "mayamot", name: "Mayamot Daycare Center",                     location: "Sumulong Hi-way",   capacity: 80  },
+
   // Barangay Muntindilaw
   { barangay: "muntindilaw", name: "Puno Multipurpose Hall – Rescue Bldg.", location: "Barangay Compound",              capacity: 300 },
   { barangay: "muntindilaw", name: "Muntindilaw National High School",       location: "Duluth Brookside Subdivision",   capacity: 500 },
@@ -22,10 +73,48 @@ const SEED = [
   { barangay: "muntindilaw", name: "Village East Clubhouse Basketball Court",location: "L'Village East Avenue",          capacity: 200 },
   { barangay: "muntindilaw", name: "Vista Verde Executive Basketball Court", location: "Alfonso St., Vista Verde",       capacity: 150 },
 
-  // Barangay Mayamot
-  { barangay: "mayamot", name: "Kingsville Evacuation Center (City Manage)", location: "Kingsville Subd.",      capacity: 200 },
-  { barangay: "mayamot", name: "Mayamot Elementary School Covered Court",    location: "147 Sumulong Hi-way",   capacity: 300 },
-  { barangay: "mayamot", name: "Mayamot Daycare Center",                     location: "Sumulong Hi-way",       capacity: 80  },
+  // Private Centers
+  { barangay: "private", name: "La Colina Sports Complex",                location: "La Colina",             capacity: 500 },
+  { barangay: "private", name: "Robinsons Place Antipolo",                 location: "Sumulong Hi-way",       capacity: 1000},
+  { barangay: "private", name: "SM Masinag",                               location: "Masinag, Antipolo",     capacity: 1200},
+
+  // Barangay San Isidro
+  { barangay: "sanisidro", name: "San Isidro Elementary School",           location: "San Isidro",            capacity: 350 },
+  { barangay: "sanisidro", name: "San Isidro National High School",        location: "San Isidro",            capacity: 500 },
+  { barangay: "sanisidro", name: "Barangay Hall",                          location: "San Isidro",            capacity: 150 },
+  { barangay: "sanisidro", name: "Barangay Covered Court",                 location: "San Isidro",            capacity: 200 },
+
+  // Barangay San Jose
+  { barangay: "sanjose", name: "San Jose National High School",            location: "San Jose",              capacity: 600 },
+  { barangay: "sanjose", name: "San Jose Elementary School",               location: "San Jose",              capacity: 400 },
+  { barangay: "sanjose", name: "Barangay Hall",                            location: "San Jose",              capacity: 150 },
+  { barangay: "sanjose", name: "Barangay Covered Court",                   location: "San Jose",              capacity: 200 },
+  { barangay: "sanjose", name: "San Jose Daycare Center",                  location: "San Jose",              capacity: 80  },
+
+  // Barangay San Juan
+  { barangay: "sanjuan", name: "San Juan Elementary School",               location: "San Juan",              capacity: 350 },
+  { barangay: "sanjuan", name: "Barangay Hall",                            location: "San Juan",              capacity: 150 },
+  { barangay: "sanjuan", name: "Barangay Covered Court",                   location: "San Juan",              capacity: 200 },
+
+  // Barangay San Luis
+  { barangay: "sanluis", name: "San Luis National High School",            location: "San Luis",              capacity: 600 },
+  { barangay: "sanluis", name: "San Luis Elementary School",               location: "San Luis",              capacity: 400 },
+  { barangay: "sanluis", name: "Barangay Hall",                            location: "San Luis",              capacity: 150 },
+  { barangay: "sanluis", name: "Barangay Covered Court",                   location: "San Luis",              capacity: 200 },
+  { barangay: "sanluis", name: "San Luis Daycare Center",                  location: "San Luis",              capacity: 80  },
+
+  // Barangay San Roque
+  { barangay: "sanroque", name: "San Roque Elementary School",             location: "San Roque",             capacity: 350 },
+  { barangay: "sanroque", name: "San Roque National High School",          location: "San Roque",             capacity: 500 },
+  { barangay: "sanroque", name: "Barangay Hall",                           location: "San Roque",             capacity: 150 },
+  { barangay: "sanroque", name: "Barangay Covered Court",                  location: "San Roque",             capacity: 200 },
+
+  // Barangay Santa Cruz
+  { barangay: "santacruz", name: "Santa Cruz National High School",        location: "Santa Cruz",            capacity: 600 },
+  { barangay: "santacruz", name: "Santa Cruz Elementary School",           location: "Santa Cruz",            capacity: 400 },
+  { barangay: "santacruz", name: "Barangay Hall",                          location: "Santa Cruz",            capacity: 150 },
+  { barangay: "santacruz", name: "Barangay Covered Court",                 location: "Santa Cruz",            capacity: 200 },
+  { barangay: "santacruz", name: "Santa Cruz Daycare Center",              location: "Santa Cruz",            capacity: 80  },
 ];
 
 async function seedIfEmpty(barangay) {
@@ -194,7 +283,7 @@ router.put("/centers/:id/availability", protect, requireAdmin, async (req, res) 
 router.post("/centers", protect, requireAdmin, async (req, res) => {
   try {
     const userName = await resolveUserName(req);
-    const { name, location, barangay, capacity } = req.body;
+    const { name, location, barangay, capacity, lat, lng } = req.body;
     if (!name?.trim() || !location?.trim() || !barangay || !capacity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
@@ -206,6 +295,8 @@ router.post("/centers", protect, requireAdmin, async (req, res) => {
       location: location.trim(),
       barangay,
       capacity: cap,
+      lat:      lat  != null ? parseFloat(lat)  : null,
+      lng:      lng  != null ? parseFloat(lng)  : null,
     });
 
     await EvacuationLog.create({
