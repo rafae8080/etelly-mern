@@ -180,89 +180,89 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
         {/* Active Alerts */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-400">
               Active Alerts
             </p>
             <Bell size={16} className="text-gray-300" />
           </div>
           {alertsLoading ? (
-            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+            <div className="h-8 w-10 bg-gray-100 rounded animate-pulse" />
           ) : (
-            <p className="text-4xl font-bold font-mono text-gray-900">
+            <p className="text-2xl sm:text-4xl font-bold font-mono text-gray-900">
               {counts.total}
             </p>
           )}
-          <p className="text-xs text-gray-400 mt-3">Refreshes every 60s</p>
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">Refreshes every 60s</p>
         </div>
 
         {/* Pending Community Requests */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-400">
               Pending Requests
             </p>
             <ClipboardList size={16} className="text-gray-300" />
           </div>
           {reqLoading ? (
-            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+            <div className="h-8 w-10 bg-gray-100 rounded animate-pulse" />
           ) : (
             <p
-              className={`text-4xl font-bold font-mono ${
+              className={`text-2xl sm:text-4xl font-bold font-mono ${
                 pendingRequestsCount > 0 ? "text-amber-600" : "text-gray-900"
               }`}
             >
               {pendingRequestsCount}
             </p>
           )}
-          <p className="text-xs text-gray-400 mt-3">Community resource requests</p>
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">Community resource requests</p>
         </div>
 
         {/* Offered Donations */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-400">
               Offered Donations
             </p>
             <Gift size={16} className="text-gray-300" />
           </div>
           {donLoading ? (
-            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+            <div className="h-8 w-10 bg-gray-100 rounded animate-pulse" />
           ) : (
             <p
-              className={`text-4xl font-bold font-mono ${
+              className={`text-2xl sm:text-4xl font-bold font-mono ${
                 offeredDonationsCount > 0 ? "text-green-600" : "text-gray-900"
               }`}
             >
               {offeredDonationsCount}
             </p>
           )}
-          <p className="text-xs text-gray-400 mt-3">Awaiting drop-off assignment</p>
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">Awaiting drop-off assignment</p>
         </div>
 
         {/* Pending Reports */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-400">
               Pending Reports
             </p>
             <Clock size={16} className="text-gray-300" />
           </div>
           {reportsLoading ? (
-            <div className="h-10 w-12 bg-gray-100 rounded animate-pulse" />
+            <div className="h-8 w-10 bg-gray-100 rounded animate-pulse" />
           ) : (
             <p
-              className={`text-4xl font-bold font-mono ${
+              className={`text-2xl sm:text-4xl font-bold font-mono ${
                 pendingReports.length > 0 ? "text-amber-600" : "text-gray-900"
               }`}
             >
               {pendingReports.length}
             </p>
           )}
-          <p className="text-xs text-gray-400 mt-3">
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">
             {pendingReports.length > 0 ? "Awaiting review" : "Nothing pending"}
           </p>
         </div>
@@ -384,7 +384,7 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">
           Quick Access
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
           {visibleModules.map((module) => (
             <DashboardCard key={module.href} {...module} />
           ))}

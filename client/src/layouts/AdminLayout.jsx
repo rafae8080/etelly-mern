@@ -9,9 +9,9 @@ export default function AdminLayout({ children, userEmail, onLogout }) {
       <Sidebar />
 
       {/* Main content — offset by sidebar width on large screens */}
-      <div className="flex flex-col flex-1 lg:ml-64 min-h-screen">
+      <div className="flex flex-col flex-1 lg:ml-64 min-h-screen overflow-x-hidden">
         <Header userEmail={userEmail} onLogout={onLogout} />
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

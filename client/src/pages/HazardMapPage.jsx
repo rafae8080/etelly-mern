@@ -86,6 +86,19 @@ function FlyToUser({ trigger, userPos }) {
   return null;
 }
 
+function FlyToTarget({ target }) {
+  const map = useMap();
+  const prevTarget = useRef(null);
+
+  useEffect(() => {
+    if (!target || target === prevTarget.current) return;
+    prevTarget.current = target;
+    map.flyTo([target.lat, target.lon], 8, { duration: 1.4 });
+  }, [target, map]);
+
+  return null;
+}
+
 function InvalidateSizeOnChange({ trigger }) {
   const map = useMap();
   useEffect(() => {
@@ -137,6 +150,8 @@ export default function HazardMapPage() {
     isOffline: false,
     cachedAt: null,
   });
+
+  const [stormFlyTarget, setStormFlyTarget] = useState(null);
 
   const [reportFilters, setReportFilters] = useState({ types: ["all"] });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -253,6 +268,7 @@ export default function HazardMapPage() {
         <EvacuationCentersLayer visible={layers.evacuation} />
         <UserLocationMarker onLocated={setUserPos} />
         <FlyToUser trigger={flyTrigger} userPos={userPos} />
+        <FlyToTarget target={stormFlyTarget} />
         <MapStatusBar />
         <MapReadyHandler onReady={() => setLoading(false)} />
         <InvalidateSizeOnChange trigger={isFullscreen} />
@@ -339,6 +355,7 @@ export default function HazardMapPage() {
           onToggle={() => togglePopup("typhoon")}
           topStyle={btnStyle("typhoon")}
           onOfflineChange={handleOfflineChange}
+          onFlyTo={(lat, lon) => setStormFlyTarget({ lat, lon, t: Date.now() })}
         />
       )}
 
@@ -444,12 +461,12 @@ export default function HazardMapPage() {
       {/* Title bar */}
       <div className="mb-4 flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Hazard Map</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Hazard Map</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {CITY_NAME} — Disaster Preparedness Viewer
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           {offlineInfo.isOffline ? (
             <>
               <span className="w-2 h-2 rounded-full bg-amber-400" />
@@ -472,7 +489,7 @@ export default function HazardMapPage() {
       </div>
 
       {/* Map wrapper */}
-      <div className="relative flex-1 rounded-2xl overflow-hidden isolate border border-gray-200 shadow-lg min-h-[550px]">
+      <div className="relative flex-1 rounded-2xl overflow-hidden isolate border border-gray-200 shadow-lg min-h-[400px] sm:min-h-[550px]">
         {mapInterior}
       </div>
     </div>

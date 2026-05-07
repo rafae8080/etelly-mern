@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { User, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import NotificationToggle from "../pwa/NotificationToggle";
 
 export default function Header({ userEmail = "", onLogout }) {
   const navigate = useNavigate();
@@ -30,14 +31,16 @@ export default function Header({ userEmail = "", onLogout }) {
 
   return (
     <>
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 pl-14 pr-6 py-4 lg:px-6">
         <div className="flex items-center justify-between">
           <div className="flex-1 max-w-md" />
 
           <div className="flex items-center gap-4">
+            <NotificationToggle />
+
             {/* User info */}
             <div className="flex items-center gap-3">
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium">
                   {userEmail || "Admin User"}
                 </p>
@@ -55,7 +58,7 @@ export default function Header({ userEmail = "", onLogout }) {
               title="Logout"
             >
               <LogOut size={16} />
-              Log out
+              <span className="hidden sm:inline">Log out</span>
             </button>
           </div>
         </div>

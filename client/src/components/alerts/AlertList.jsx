@@ -1,17 +1,25 @@
 import { AlertTriangle, CheckCircle } from "lucide-react";
 import AlertTile from "./AlertTile";
 
-const SECTION_ORDER = ["evacuate", "critical", "warning", "watch"];
-
 export default function AlertList({ alerts, loading, error, activeFilter, onDismissRequest, onRetry }) {
-  const sorted =
-    activeFilter === "all"
-      ? SECTION_ORDER.flatMap((sev) => alerts.filter((a) => a.severity === sev))
-      : alerts;
+  let sorted;
+  if (activeFilter === "all") {
+    // rescue type always leads, then evacuate, warning, watch
+    sorted = [
+      ...alerts.filter((a) => a.type === "rescue"),
+      ...alerts.filter((a) => a.type !== "rescue" && a.severity === "evacuate"),
+      ...alerts.filter((a) => a.type !== "rescue" && a.severity === "warning"),
+      ...alerts.filter((a) => a.type !== "rescue" && a.severity === "watch"),
+      ...alerts.filter((a) => a.type !== "rescue" && !["evacuate", "warning", "watch"].includes(a.severity)),
+    ];
+  } else if (activeFilter === "rescue") {
+    sorted = alerts.filter((a) => a.type === "rescue");
+  } else {
+    sorted = alerts.filter((a) => a.type !== "rescue" && a.severity === activeFilter);
+  }
 
   return (
     <div className="space-y-2">
-      {/* Skeleton */}
       {loading && alerts.length === 0 && (
         <div className="space-y-2">
           {[1, 2, 3].map((n) => (
@@ -20,7 +28,6 @@ export default function AlertList({ alerts, loading, error, activeFilter, onDism
         </div>
       )}
 
-      {/* Error */}
       {!loading && error && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <AlertTriangle size={28} className="text-red-400" />
@@ -32,8 +39,7 @@ export default function AlertList({ alerts, loading, error, activeFilter, onDism
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && !error && alerts.length === 0 && (
+      {!loading && !error && sorted.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <CheckCircle size={28} className="text-green-400" />
           <p className="text-sm font-semibold text-gray-700">
@@ -47,7 +53,6 @@ export default function AlertList({ alerts, loading, error, activeFilter, onDism
         </div>
       )}
 
-      {/* Alert tiles */}
       {!loading && !error && sorted.map((alert) => (
         <AlertTile key={alert._id} alert={alert} onDismissRequest={onDismissRequest} />
       ))}

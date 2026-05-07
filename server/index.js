@@ -11,6 +11,7 @@ import alertRoutes from "./routes/alerts.js";
 import reportRoutes from "./routes/reports.js";
 import evacuationRoutes from "./routes/evacuation.js";
 import communityRoutes from "./routes/community.js";
+import pushRoutes from "./routes/push.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
@@ -19,6 +20,7 @@ const app = express();
 const server = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://localhost:4173",
   "http://localhost:3000",
   /\.vercel\.app$/,
 ];
@@ -51,6 +53,7 @@ app.use("/api/alerts", alertRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/evacuation", evacuationRoutes);
 app.use("/api/community", communityRoutes);
+app.use("/api/push", pushRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {

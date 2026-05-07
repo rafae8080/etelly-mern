@@ -1,37 +1,51 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Settings, Users, Building2, X, Check, RotateCcw,
-  ChevronDown, ClipboardList, ChevronUp, Loader2,
+  Settings, Users, X, Check, RotateCcw,
+  ChevronDown, ClipboardList, ChevronUp, Loader2, Plus, Phone,
 } from "lucide-react";
 import { connectSocket } from "../utils/socket";
 import buildingImg from "../images/building.png";
+import LocationPicker from "../components/alerts/LocationPicker/LocationPicker";
 
 // ── Facility image map ────────────────────────────────────────────────────────
-// Keys are facility types detected from the center name.
-// Swap any value for a real import once the asset is ready.
 const FACILITY_IMAGES = {
-  school:   buildingImg,
-  court:    buildingImg,
-  hall:     buildingImg,
-  daycare:  buildingImg,
-  clubhouse:buildingImg,
-  default:  buildingImg,
+  school:    buildingImg,
+  court:     buildingImg,
+  hall:      buildingImg,
+  daycare:   buildingImg,
+  clubhouse: buildingImg,
+  default:   buildingImg,
 };
 
 function getFacilityImage(centerName = "") {
   const n = centerName.toLowerCase();
-  if (n.includes("school"))            return FACILITY_IMAGES.school;
-  if (n.includes("court"))             return FACILITY_IMAGES.court;
+  if (n.includes("school"))                              return FACILITY_IMAGES.school;
+  if (n.includes("court"))                               return FACILITY_IMAGES.court;
   if (n.includes("hall") || n.includes("covered court")) return FACILITY_IMAGES.hall;
-  if (n.includes("daycare"))           return FACILITY_IMAGES.daycare;
-  if (n.includes("clubhouse"))         return FACILITY_IMAGES.clubhouse;
+  if (n.includes("daycare"))                             return FACILITY_IMAGES.daycare;
+  if (n.includes("clubhouse"))                           return FACILITY_IMAGES.clubhouse;
   return FACILITY_IMAGES.default;
 }
 
-// ── Barangay list ─────────────────────────────────────────────────────────────
+// ── Barangay list with emergency hotlines ─────────────────────────────────────
 const BARANGAYS = [
-  { value: "muntindilaw", label: "Brgy. Muntindilaw" },
-  { value: "mayamot",     label: "Brgy. Mayamot"     },
+  { value: "bagongnayon",  label: "Brgy. Bagong Nayon",  hotlines: ["0945-624-8906", "0962-391-2390"] },
+  { value: "beverlyhills", label: "Brgy. Beverly Hills",  hotlines: ["0930-027-6922", "8518-2988", "0966-661-4839"] },
+  { value: "calawis",      label: "Brgy. Calawis",        hotlines: ["0994-833-9165"] },
+  { value: "cupang",       label: "Brgy. Cupang",         hotlines: ["0968-491-8172", "0910-524-9816", "0953-669-4295", "682-4946", "682-4837"] },
+  { value: "dalig",        label: "Brgy. Dalig",          hotlines: ["0968-491-8172", "0910-524-9816", "0953-669-4295", "682-4946", "682-4837"] },
+  { value: "delapaz",      label: "Brgy. Dela Paz",       hotlines: ["8260-0182", "0960-604-4446"] },
+  { value: "inarawan",     label: "Brgy. Inarawan",       hotlines: ["0956-084-5977"] },
+  { value: "mambugan",     label: "Brgy. Mambugan",       hotlines: ["0928-776-7525", "0998-475-1517"] },
+  { value: "mayamot",      label: "Brgy. Mayamot",        hotlines: ["0918-288-7373", "0939-811-1094", "8470-6121", "8470-7935", "8880-4373", "8470-8924"] },
+  { value: "muntindilaw",  label: "Brgy. Muntindilaw",    hotlines: ["8463-0534", "0917-515-1764"] },
+  { value: "sanisidro",    label: "Brgy. San Isidro",     hotlines: ["0933-829-7656", "0933-815-9319"] },
+  { value: "sanjose",      label: "Brgy. San Jose",       hotlines: ["0966-448-6020", "0915-388-9567", "8818-4641"] },
+  { value: "sanjuan",      label: "Brgy. San Juan",       hotlines: ["0968-602-8496", "8296-0453"] },
+  { value: "sanluis",      label: "Brgy. San Luis",       hotlines: ["0956-442-2732", "0967-291-4584", "0935-532-5076", "0922-420-3099", "8696-7370"] },
+  { value: "sanroque",     label: "Brgy. San Roque",      hotlines: ["0945-624-8906", "0962-391-2390"] },
+  { value: "santacruz",    label: "Brgy. Santa Cruz",     hotlines: ["0927-687-5203", "0928-620-6373", "0951-301-2629", "0912-985-1208", "8534-1105"] },
+  { value: "private",      label: "Private Centers",      hotlines: [] },
 ];
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -76,18 +90,29 @@ function describeLog(log) {
       return { actor: name, text: `changed capacity at "${log.centerName}"`,  detail: `${log.previousValue} → ${log.newValue}`             };
     case "reset":
       return { actor: name, text: `reset "${log.centerName}"`,                detail: `was ${log.previousValue}`                           };
+    case "availability_update":
+      return { actor: name, text: `marked "${log.centerName}" as ${log.newValue ? "available" : "unavailable"}`, detail: "" };
+    case "center_created":
+      return { actor: name, text: `added new center "${log.centerName}"`,     detail: `capacity: ${log.newValue}`                          };
     default:
       return { actor: name, text: `modified "${log.centerName}"`,             detail: ""                                                   };
   }
 }
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
-function EditModal({ center, onClose, onSaveCapacity, onReset }) {
-  const [cap, setCap] = useState(String(center.capacity));
+function EditModal({ center, onClose, onSaveCapacity, onReset, onToggleAvailability }) {
+  const [cap, setCap]         = useState(String(center.capacity));
+  const [isAvail, setIsAvail] = useState(center.available !== false);
 
   function submit() {
     const n = parseInt(cap, 10);
     if (!isNaN(n) && n > 0) onSaveCapacity(center._id, n);
+  }
+
+  function toggleAvailability() {
+    const next = !isAvail;
+    setIsAvail(next);
+    onToggleAvailability(center._id, next);
   }
 
   return (
@@ -98,6 +123,22 @@ function EditModal({ center, onClose, onSaveCapacity, onReset }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
         <p className="text-sm text-gray-500 mb-5 leading-snug">{center.name}</p>
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+          Availability
+        </label>
+        <button
+          onClick={toggleAvailability}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm font-semibold transition-colors mb-5
+            ${isAvail
+              ? "bg-green-50 border-green-200 text-green-700"
+              : "bg-red-50 border-red-200 text-red-600"}`}
+        >
+          <span>{isAvail ? "Available — open to evacuees" : "Unavailable — closed"}</span>
+          <div className={`relative w-10 h-5 rounded-full transition-colors ${isAvail ? "bg-green-500" : "bg-red-400"}`}>
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${isAvail ? "left-5" : "left-0.5"}`} />
+          </div>
+        </button>
 
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
           Total Capacity
@@ -129,6 +170,84 @@ function EditModal({ center, onClose, onSaveCapacity, onReset }) {
   );
 }
 
+// ── Create modal ──────────────────────────────────────────────────────────────
+function CreateModal({ currentBarangay, onClose, onCreate }) {
+  const [name,     setName]     = useState("");
+  const [location, setLocation] = useState("");
+  const [lat,      setLat]      = useState(null);
+  const [lng,      setLng]      = useState(null);
+  const [barangay, setBarangay] = useState(currentBarangay);
+  const [cap,      setCap]      = useState("100");
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState("");
+
+  async function submit() {
+    if (!name.trim() || !location.trim()) { setErr("Name and location are required."); return; }
+    const n = parseInt(cap, 10);
+    if (isNaN(n) || n < 1) { setErr("Capacity must be at least 1."); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      await onCreate({ name: name.trim(), location: location.trim(), barangay, capacity: n, lat, lng });
+    } catch {
+      setErr("Failed to create center. Try again.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-gray-900">Add Evacuation Center</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        {err && <p className="text-xs text-red-600 mb-3">{err}</p>}
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Name</label>
+        <input
+          value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Barangay Covered Court"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+        />
+
+        <div className="mb-3">
+          <LocationPicker
+            location={location}
+            onLocationChange={setLocation}
+            onCoordinatesChange={(lt, lg) => { setLat(lt); setLng(lg); }}
+          />
+        </div>
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Barangay</label>
+        <select
+          value={barangay} onChange={(e) => setBarangay(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+        >
+          {BARANGAYS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+        </select>
+
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity</label>
+        <input
+          type="number" min={1} value={cap}
+          onChange={(e) => setCap(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-5"
+        />
+
+        <button
+          onClick={submit}
+          disabled={saving || !name.trim() || !location.trim()}
+          className="w-full bg-red-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? "Adding…" : "Add Center"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EvacuationPage() {
   const [barangay, setBarangay]   = useState("muntindilaw");
@@ -139,8 +258,10 @@ export default function EvacuationPage() {
   const [editId,   setEditId]     = useState(null);
   const [inputId,  setInputId]    = useState(null);
   const [inputVal, setInputVal]   = useState("");
-  const [logsOpen, setLogsOpen]   = useState(false);
-  const [brgyOpen, setBrgyOpen]   = useState(false);
+  const [logsOpen,   setLogsOpen]   = useState(false);
+  const [brgyOpen,   setBrgyOpen]   = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const brgyBtnRef = useRef(null);
 
   // ── Fetch centers + logs ────────────────────────────────────────────────────
   const fetchCenters = useCallback(async (brgy) => {
@@ -175,7 +296,6 @@ export default function EvacuationPage() {
     const socket = connectSocket();
 
     function onUpdate({ center, log }) {
-      // Update matching center regardless of barangay (server filters by barangay)
       setCenters((prev) =>
         prev.map((c) => (c._id === center._id ? { ...c, ...center } : c)),
       );
@@ -195,7 +315,6 @@ export default function EvacuationPage() {
     const next = Math.max(0, Math.min(c.capacity, c.occupancy + delta));
     if (next === c.occupancy) return;
 
-    // Optimistic update
     setCenters((prev) => prev.map((x) => x._id === id ? { ...x, occupancy: next } : x));
 
     try {
@@ -205,7 +324,7 @@ export default function EvacuationPage() {
       });
       fetchLogs(barangay);
     } catch {
-      fetchCenters(barangay); // revert on failure
+      fetchCenters(barangay);
     }
   }
 
@@ -259,14 +378,39 @@ export default function EvacuationPage() {
     setEditId(null);
   }
 
+  async function handleToggleAvailability(id, available) {
+    setCenters((prev) => prev.map((x) => x._id === id ? { ...x, available } : x));
+    try {
+      await apiFetch(`/api/evacuation/centers/${id}/availability`, {
+        method: "PUT",
+        body: JSON.stringify({ available }),
+      });
+      fetchLogs(barangay);
+    } catch {
+      fetchCenters(barangay);
+    }
+  }
+
+  async function handleCreateCenter(data) {
+    const center = await apiFetch("/api/evacuation/centers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (center.barangay === barangay) {
+      setCenters((prev) => [...prev, center]);
+    }
+    fetchLogs(barangay);
+    setCreateOpen(false);
+  }
+
   // ── Derived stats ───────────────────────────────────────────────────────────
   const totalCap    = centers.reduce((s, c) => s + c.capacity, 0);
   const totalOcc    = centers.reduce((s, c) => s + c.occupancy, 0);
   const activeCount = centers.filter((c) => c.occupancy > 0).length;
   const vacantCount = centers.filter((c) => c.occupancy === 0).length;
 
-  // Sort: Active (1) → Near Full (2) → Full (3) → Vacant (4)
   function sortPriority(c) {
+    if (c.available === false) return 5;
     if (c.occupancy === 0 || c.capacity <= 0) return 4;
     const p = c.occupancy / c.capacity;
     if (p >= 1)   return 3;
@@ -277,8 +421,9 @@ export default function EvacuationPage() {
 
   const editCenter = centers.find((c) => c._id === editId) ?? null;
   const brgyLabel  = BARANGAYS.find((b) => b.value === barangay)?.label ?? barangay;
+  const hotlines   = BARANGAYS.find((b) => b.value === barangay)?.hotlines ?? [];
 
-  const stored = localStorage.getItem("user");
+  const stored  = localStorage.getItem("user");
   const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -288,35 +433,60 @@ export default function EvacuationPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Evacuation Centers</h1>
-          <p className="text-sm text-gray-500 mt-1">Antipolo City — {brgyLabel} Pilot Tracking</p>
+          <p className="text-sm text-gray-500 mt-1">Antipolo City — {brgyLabel}</p>
         </div>
 
-        {/* Barangay selector */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setBrgyOpen((o) => !o)}
-            className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 shadow-sm transition-colors"
-          >
-            {brgyLabel}
-            <ChevronDown size={14} className={`transition-transform ${brgyOpen ? "rotate-180" : ""}`} />
-          </button>
-
-          {brgyOpen && (
-            <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden min-w-[180px]">
-              {BARANGAYS.map((b) => (
-                <button
-                  key={b.value}
-                  onClick={() => { setBarangay(b.value); setBrgyOpen(false); }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors
-                    ${barangay === b.value
-                      ? "bg-red-50 text-red-700 font-semibold"
-                      : "text-gray-700 hover:bg-gray-50"}`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors"
+            >
+              <Plus size={14} />
+              Add Center
+            </button>
           )}
+
+          {/* Barangay selector */}
+          <div className="shrink-0">
+            <button
+              ref={brgyBtnRef}
+              onClick={() => setBrgyOpen((o) => !o)}
+              className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 shadow-sm transition-colors"
+            >
+              {brgyLabel}
+              <ChevronDown size={14} className={`transition-transform ${brgyOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {brgyOpen && (() => {
+              const rect = brgyBtnRef.current?.getBoundingClientRect();
+              return (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setBrgyOpen(false)} />
+                  <div
+                    className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-lg overflow-y-auto max-h-72 min-w-[200px]"
+                    style={{
+                      top:   rect ? rect.bottom + 4 : 0,
+                      right: rect ? window.innerWidth - rect.right : 0,
+                    }}
+                  >
+                    {BARANGAYS.map((b) => (
+                      <button
+                        key={b.value}
+                        onClick={() => { setBarangay(b.value); setBrgyOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors
+                          ${barangay === b.value
+                            ? "bg-red-50 text-red-700 font-semibold"
+                            : "text-gray-700 hover:bg-gray-50"}`}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </div>
       </div>
 
@@ -334,6 +504,27 @@ export default function EvacuationPage() {
           </div>
         ))}
       </div>
+
+      {/* Emergency hotlines */}
+      {hotlines.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3">
+          <Phone size={15} className="text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-red-700 mb-1.5">Emergency Hotlines — {brgyLabel}</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {hotlines.map((h) => (
+                <a
+                  key={h}
+                  href={`tel:${h.replace(/[-\s]/g, "")}`}
+                  className="text-xs font-medium text-red-600 hover:text-red-800 transition-colors"
+                >
+                  {h}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading / Error */}
       {loading && (
@@ -354,14 +545,17 @@ export default function EvacuationPage() {
             const s = statusOf(c.occupancy, c.capacity);
             const p = c.capacity > 0 ? Math.min(100, Math.round((c.occupancy / c.capacity) * 100)) : 0;
             const isEditing = inputId === c._id;
+            const unavailable = c.available === false;
 
             return (
               <div
                 key={c._id}
-                className="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all p-4"
+                className={`rounded-xl border transition-all p-4
+                  ${unavailable
+                    ? "bg-gray-50 border-gray-200 opacity-70"
+                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"}`}
               >
                 <div className="flex items-start gap-3">
-                  {/* Image */}
                   <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100 shrink-0">
                     <img
                       src={c.imageUrl || getFacilityImage(c.name)}
@@ -371,18 +565,22 @@ export default function EvacuationPage() {
                     />
                   </div>
 
-                  {/* Body */}
                   <div className="flex-1 min-w-0">
-                    {/* Name + status + settings */}
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-gray-900 leading-snug">{c.name}</h3>
                         <p className="text-xs text-gray-400">{c.location}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
-                          {s.label}
-                        </span>
+                        {unavailable ? (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                            Unavailable
+                          </span>
+                        ) : (
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.badge}`}>
+                            {s.label}
+                          </span>
+                        )}
                         <button
                           onClick={() => setEditId(c._id)}
                           className="text-gray-300 hover:text-gray-500 transition-colors"
@@ -392,7 +590,6 @@ export default function EvacuationPage() {
                       </div>
                     </div>
 
-                    {/* Progress bar */}
                     <div className="mt-2.5 mb-2">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] text-gray-400">Occupancy</span>
@@ -403,20 +600,17 @@ export default function EvacuationPage() {
                       </div>
                     </div>
 
-                    {/* Controls */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-y-1">
                       <div className="flex items-center gap-1.5">
                         <Users size={12} className="text-gray-400 shrink-0" />
                         <span className="text-xs text-gray-400">Evacuees:</span>
 
-                        {/* − */}
                         <button
                           onClick={() => adjust(c._id, -1)}
                           disabled={c.occupancy <= 0}
                           className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors leading-none"
                         >−</button>
 
-                        {/* Count — click to type */}
                         {isEditing ? (
                           <div className="flex items-center gap-1">
                             <input
@@ -448,7 +642,6 @@ export default function EvacuationPage() {
 
                         <span className="text-xs text-gray-400 font-medium">/ {c.capacity}</span>
 
-                        {/* + */}
                         <button
                           onClick={() => adjust(c._id, +1)}
                           disabled={c.occupancy >= c.capacity}
@@ -456,7 +649,7 @@ export default function EvacuationPage() {
                         >+</button>
                       </div>
 
-                      <span className="text-[10px] text-gray-400 shrink-0">
+                      <span className="text-[10px] text-gray-400">
                         {c.updatedAt ? `Updated ${fmtTime(c.updatedAt)}` : "Not yet updated"}
                       </span>
                     </div>
@@ -523,6 +716,16 @@ export default function EvacuationPage() {
           onClose={() => setEditId(null)}
           onSaveCapacity={handleSaveCapacity}
           onReset={handleReset}
+          onToggleAvailability={handleToggleAvailability}
+        />
+      )}
+
+      {/* Create modal — admin only */}
+      {createOpen && (
+        <CreateModal
+          currentBarangay={barangay}
+          onClose={() => setCreateOpen(false)}
+          onCreate={handleCreateCenter}
         />
       )}
     </div>

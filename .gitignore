@@ -16,7 +16,7 @@ dist-ssr
 .claude/
 CLAUDE.md
 
-
+SYSTEM_OVERVIEW.md
 DEPLOYMENT.md
 DOCUMENTATION.md
 
@@ -31,4 +31,5 @@ DOCUMENTATION.md
 *.sln
 *.sw?
 
+server\.env
 .env

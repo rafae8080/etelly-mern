@@ -10,7 +10,7 @@ import {
   Package,
   Users,
   Menu,
-  X,
+  ChevronLeft,
   Dam,
   InfoIcon,
   HandHelpingIcon,
@@ -51,13 +51,15 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-[1300] p-2 rounded-md bg-white shadow-lg"
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      {/* Mobile menu button — only when sidebar is closed */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="lg:hidden fixed top-4 left-4 z-[1300] p-2 rounded-md bg-white shadow-lg"
+        >
+          <Menu size={24} />
+        </button>
+      )}
 
       {/* Mobile overlay */}
       {isOpen && (
@@ -77,9 +79,17 @@ export default function Sidebar() {
       >
         <div className="h-full px-3 py-4 overflow-y-auto">
           {/* Logo */}
-          <div className="mb-8 px-3">
-            <h1 className="text-2xl font-bold text-red-600">E-Telly</h1>
-            <p className="text-xs text-gray-500 mt-1">Admin Dashboard</p>
+          <div className="mb-8 px-3 flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-red-600">E-Telly</h1>
+              <p className="text-xs text-gray-500 mt-1">Admin Dashboard</p>
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="lg:hidden p-1 rounded-md hover:bg-gray-100 text-gray-500 mt-0.5"
+            >
+              <ChevronLeft size={20} />
+            </button>
           </div>
 
           {/* Navigation */}

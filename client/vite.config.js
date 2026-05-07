@@ -1,8 +1,48 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      includeAssets: ["icons/icon.png"],
+      // ---- START OF TEST LINE — delete before deploying to production
+      devOptions: { enabled: true, type: "module" },
+      // ---- END OF TEST LINE — delete up to here
+      manifest: {
+        name: "E-Telly: Disaster Preparedness & Resource Sharing",
+        short_name: "E-Telly",
+        description:
+          "Smart disaster preparedness, real-time hazard alerts, and community resource sharing for Antipolo City.",
+        start_url: "/dashboard",
+        display: "standalone",
+        orientation: "any",
+        theme_color: "#1e293b",
+        background_color: "#1e293b",
+        icons: [
+          {
+            src: "/icons/icon.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
+        categories: ["utilities", "productivity"],
+        lang: "en-PH",
+      },
+    }),
+  ],
   server: {
     proxy: {
       "/api": {
@@ -13,6 +53,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ["leaflet"],
-    exclude: ["leaflet.heat"], // ← tell Vite to skip it
+    exclude: ["leaflet.heat"],
   },
 });

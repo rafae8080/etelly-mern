@@ -7,7 +7,7 @@ const schema = new mongoose.Schema(
     barangay:   String,
     action: {
       type: String,
-      enum: ["occupancy_update", "capacity_update", "reset"],
+      enum: ["occupancy_update", "capacity_update", "reset", "availability_update", "center_created"],
       required: true,
     },
     previousValue: Number,

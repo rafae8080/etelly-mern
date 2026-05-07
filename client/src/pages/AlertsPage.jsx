@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { Plus, RefreshCw, ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, RefreshCw, ClipboardList, ChevronDown, ChevronUp, WifiOff } from "lucide-react";
 import { useAlerts } from "../hooks/useAlerts";
+import { useOfflineAlertQueue } from "../hooks/useOfflineAlertQueue";
 import { timeAgo } from "../utils/timeHelpers";
 import AlertList from "../components/alerts/AlertList";
 import FilterTabs from "../components/alerts/FilterTabs";
@@ -21,8 +22,10 @@ function fmtTime(ts) {
 }
 
 export default function AlertsPage() {
-  const { alerts, loading, error, lastFetched, dismiss, refresh, counts } =
+  const { alerts, loading, error, isStale, lastFetched, dismiss, refresh, cooldownSecs, counts } =
     useAlerts();
+
+  const { pendingCount, syncing, enqueue, flush } = useOfflineAlertQueue(refresh);
 
   const stored = localStorage.getItem("user");
   const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
@@ -45,9 +48,9 @@ export default function AlertsPage() {
   }, []);
 
   const filtered =
-    activeFilter === "all"
-      ? alerts
-      : alerts.filter((a) => a.severity === activeFilter);
+    activeFilter === "all"     ? alerts :
+    activeFilter === "rescue"  ? alerts.filter((a) => a.type === "rescue") :
+    alerts.filter((a) => a.type !== "rescue" && a.severity === activeFilter);
 
   const handleDismissConfirm = () => {
     if (pendingDismiss) {
@@ -73,19 +76,31 @@ export default function AlertsPage() {
           </p>
           {lastFetched && (
             <p className="text-xs text-gray-400 mt-0.5 font-mono">
-              Updated {timeAgo(lastFetched)}
+              Last updated at{" "}
+              {new Date(lastFetched).toLocaleTimeString("en-PH", {
+                timeZone: "Asia/Manila",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {isStale
+                ? <span className="text-amber-500 font-semibold"> · offline</span>
+                : ` · ${timeAgo(lastFetched)}`}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={refresh}
-            className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center
-                       text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-            title="Refresh alerts"
+            onClick={cooldownSecs > 0 ? undefined : refresh}
+            disabled={cooldownSecs > 0}
+            title={cooldownSecs > 0 ? `Refresh in ${cooldownSecs}s` : "Refresh alerts"}
+            className={`w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center
+                        transition-colors
+                        ${cooldownSecs > 0
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-gray-400 hover:bg-gray-50 hover:text-gray-700"}`}
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading && cooldownSecs === 0 ? "animate-spin" : ""} />
           </button>
           <button
             onClick={() => setShowModal(true)}
@@ -98,13 +113,35 @@ export default function AlertsPage() {
         </div>
       </div>
 
+      {/* Offline sync banner */}
+      {pendingCount > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <WifiOff size={14} className="shrink-0" />
+          <span className="flex-1">
+            {syncing
+              ? "Syncing queued alerts…"
+              : `${pendingCount} alert${pendingCount > 1 ? "s" : ""} saved offline — will sync automatically when connected`}
+          </span>
+          {!syncing && navigator.onLine && (
+            <button
+              onClick={flush}
+              className="text-xs font-semibold text-amber-700 hover:underline shrink-0"
+            >
+              Sync now
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Summary stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Total Alerts", value: counts.total,           color: "text-gray-900"  },
-          { label: "Evacuate",     value: counts.evacuate ?? 0,   color: "text-red-600"   },
-          { label: "Warning",      value: counts.warning  ?? 0,   color: "text-amber-600" },
-          { label: "Watch",        value: counts.watch    ?? 0,   color: "text-blue-600"  },
+          { label: "Total",    value: counts.total,           color: "text-gray-900"  },
+          { label: "Rescue",   value: counts.rescue   ?? 0,   color: "text-red-600"   },
+          { label: "Evacuate", value: counts.evacuate ?? 0,   color: "text-red-700"   },
+          { label: "Critical", value: counts.critical ?? 0,   color: "text-red-500"   },
+          { label: "Warning",  value: counts.warning  ?? 0,   color: "text-amber-600" },
+          { label: "Watch",    value: counts.watch    ?? 0,   color: "text-blue-600"  },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
             <p className="text-xs text-gray-400 font-medium">{s.label}</p>
@@ -193,6 +230,7 @@ export default function AlertsPage() {
         <CreateAlertModal
           onClose={() => setShowModal(false)}
           onCreated={handleCreated}
+          enqueue={enqueue}
         />
       )}
 

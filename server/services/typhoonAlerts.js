@@ -1,25 +1,33 @@
 /**
  * Typhoon alerts via GDACS RSS TC feed (routed through the cached hazard.js endpoint).
  *
- * Severity (PAGASA PSWS aligned):
- *   wind >= 220 kph OR (red + wind >= 185) → evacuate
- *   (red/orange) + wind >= 118 kph         → critical  (PSWS #3)
- *   (red/orange) + wind >=  62 kph         → warning   (PSWS #2)
- *   otherwise                              → watch
+ * Severity — PAGASA 2022 wind thresholds (no GDACS alert level):
+ *   wind >= 185 kph → evacuate  (Super Typhoon)
+ *   wind >= 118 kph → critical  (Typhoon)
+ *   wind >=  89 kph → warning   (Severe Tropical Storm)
+ *   otherwise       → watch
  *
  * Expiry: 6 hours — matches PAGASA bulletin issuance cycle.
  */
 
-import { upsertAlert, toHourKey } from "./alertHelpers.js";
+import Alert from "../models/Alert.js";
+import { upsertAlert } from "./alertHelpers.js";
 
 const TYPHOON_URL =
   `${process.env.SERVER_BASE_URL ?? "http://localhost:5000"}/api/hazard/typhoon`;
 
 export async function runTyphoonCheck() {
   try {
-    const res = await fetch(TYPHOON_URL, { signal: AbortSignal.timeout(15000) });
+    const res = await fetch(TYPHOON_URL, { signal: AbortSignal.timeout(35000) });
     if (!res.ok) throw new Error(`/api/hazard/typhoon returned ${res.status}`);
     const data = await res.json();
+
+    // Deactivate all old hourly-keyed duplicates (legacy format: typhoon_id_YYYY-M-D-H).
+    // Runs unconditionally so leftovers are cleaned even when no storms are active.
+    await Alert.updateMany(
+      { type: "typhoon", isActive: true, _dedupeKey: { $regex: "^typhoon_.+_\\d{4}-" } },
+      { $set: { isActive: false } },
+    );
 
     const storms = data.storms ?? [];
     if (storms.length === 0) {
@@ -28,35 +36,33 @@ export async function runTyphoonCheck() {
     }
 
     for (const storm of storms) {
-      const windKph    = storm.windKph ?? 0;
-      const gdacsLevel = (storm.alertLevel ?? "green").toLowerCase();
+      const windKph = storm.windKph ?? 0;
 
+      // Severity derived purely from PAGASA 2022 wind thresholds — no GDACS alert level
       let severity;
-      if ((gdacsLevel === "red" || gdacsLevel === "orange") && windKph >= 118) {
-        severity = "critical";
-      } else if ((gdacsLevel === "red" || gdacsLevel === "orange") && windKph >= 62) {
-        severity = "warning";
-      } else {
-        severity = "watch";
-      }
+      if      (windKph >= 185) severity = "evacuate"; // Super Typhoon (STY)
+      else if (windKph >= 118) severity = "critical";  // Typhoon (TY)
+      else if (windKph >= 89)  severity = "warning";   // Severe Tropical Storm (STS)
+      else                     severity = "watch";     // TS (62-88) or TD (≤61)
 
-      if (windKph >= 220 || (windKph >= 185 && gdacsLevel === "red")) {
-        severity = "evacuate";
-      }
-
-      const category = storm.category?.label ?? "Tropical Cyclone";
+      // PAGASA 2022 category label for display
+      const pagasaLabel =
+        windKph >= 185 ? "Super Typhoon (STY)"
+        : windKph >= 118 ? "Typhoon (TY)"
+        : windKph >= 89  ? "Severe Tropical Storm (STS)"
+        : windKph >= 62  ? "Tropical Storm (TS)"
+        :                  "Tropical Depression (TD)";
 
       await upsertAlert({
         source: "GDACS",
-        _dedupeKey: `typhoon_${storm.id}_${toHourKey()}`,
+        _dedupeKey: `typhoon_${storm.id}`,
         type: "typhoon",
         severity,
-        title: `${category} ${storm.name} — Active Near Philippines`,
+        title: `${pagasaLabel} ${storm.name} — Active Near Philippines`,
         description:
-          `${storm.name} (${category}) is active in the Western Pacific with ` +
-          `sustained winds of ${windKph} km/h. ` +
-          `GDACS alert level: ${gdacsLevel.toUpperCase()}. ` +
-          `Monitor PAGASA advisories for PSWS signal assignments. ` +
+          `${storm.name} is currently classified as a ${pagasaLabel} under the PAGASA 2022 ` +
+          `wind scale with maximum sustained winds of ${windKph} km/h. ` +
+          `Monitor PAGASA advisories for Public Storm Warning Signal (PSWS) assignments. ` +
           `Current position: ${storm.lat?.toFixed(1)}°N, ${storm.lon?.toFixed(1)}°E.`,
         location: `${storm.lat?.toFixed(2)}°N, ${storm.lon?.toFixed(2)}°E`,
         barangays: [],
@@ -64,7 +70,7 @@ export async function runTyphoonCheck() {
       });
 
       console.log(
-        `[AlertEngine] Typhoon — ${storm.name} (${windKph} kph, GDACS: ${gdacsLevel}, severity: ${severity})`,
+        `[AlertEngine] Typhoon — ${storm.name} (${windKph} kph, ${pagasaLabel}, severity: ${severity})`,
       );
     }
   } catch (err) {

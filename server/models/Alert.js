@@ -2,20 +2,31 @@
 import mongoose from "mongoose";
 
 const actionLogSchema = new mongoose.Schema({
-  action: { type: String, enum: ["created", "dismissed"] },
-  by:     { type: String, required: true },
-  at:     { type: Date, default: Date.now },
+  action: { type: String, enum: ["created", "dismissed", "resolved"] },
+  by: { type: String, required: true },
+  at: { type: Date, default: Date.now },
 });
 
 const AlertSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: ["system", "residents", "CDRRMO"],
+    enum: ["system", "residents", "CDRRMO", "Barangay"],
     required: true,
   },
   type: {
     type: String,
-    enum: ["flood", "rainfall", "earthquake", "lahar", "typhoon", "other"],
+    enum: [
+      "fire",
+      "flood",
+      "rainfall",
+      "earthquake",
+      "lahar",
+      "typhoon",
+      "storm",
+      "landslide",
+      "rescue",
+      "other",
+    ],
     required: true,
   },
   severity: {
@@ -28,6 +39,10 @@ const AlertSchema = new mongoose.Schema({
   location: { type: String, default: "" },
   barangays: [String],
   raw: String,
+  lat: { type: Number, default: null },
+  lng: { type: Number, default: null },
+  isManual: { type: Boolean, default: false },
+  linkedReportId: { type: mongoose.Schema.Types.ObjectId, default: null },
   isActive: { type: Boolean, default: true },
   actionLog: [actionLogSchema],
   _dedupeKey: { type: String, index: true },
