@@ -464,10 +464,12 @@ export default function EvacuationPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setBrgyOpen(false)} />
                   <div
-                    className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-lg overflow-y-auto max-h-72 w-56"
+                    className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-lg overflow-y-auto max-h-72"
                     style={{
-                      top:   rect ? rect.bottom + 4 : 0,
-                      right: rect ? window.innerWidth - rect.right : 0,
+                      top:      rect ? rect.bottom + 4 : 0,
+                      right:    rect ? window.innerWidth - rect.right : 0,
+                      minWidth: rect ? rect.width : 160,
+                      maxWidth: 220,
                     }}
                   >
                     {BARANGAYS.map((b) => (
