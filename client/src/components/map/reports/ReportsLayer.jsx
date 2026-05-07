@@ -64,36 +64,56 @@ const ICON_SVGS = {
   },
 };
 
-// ── Community report marker (white circle, colored border) ───────────────────
-const createReportIcon = (type) => {
+// ── Severity/type → visual style ─────────────────────────────────────────────
+const TYPE_STYLE = {
+  flood: { bg: "#ecfeff", border: "#06b6d4", icon: "#06b6d4", pulse: false },
+  rescue: { bg: "#fef2f2", border: "#ef4444", icon: "#ef4444", pulse: true },
+  medical: { bg: "#fdf2f8", border: "#ec4899", icon: "#ec4899", pulse: false },
+  earthquake: {
+    bg: "#fff7ed",
+    border: "#f97316",
+    icon: "#f97316",
+    pulse: false,
+  },
+  landslide: {
+    bg: "#f5f3ff",
+    border: "#8b5cf6",
+    icon: "#8b5cf6",
+    pulse: false,
+  },
+  fire: { bg: "#fef2f2", border: "#dc2626", icon: "#dc2626", pulse: true },
+  storm: { bg: "#f5f3ff", border: "#7c3aed", icon: "#7c3aed", pulse: false },
+  other: { bg: "#f9fafb", border: "#6b7280", icon: "#6b7280", pulse: false },
+};
+
+const ALERT_SEVERITY_STYLE = {
+  evacuate: { bg: "#fef2f2", border: "#dc2626", pulse: true },
+  critical: { bg: "#fef2f2", border: "#dc2626", pulse: true },
+  warning: { bg: "#fffbeb", border: "#f59e0b", pulse: false },
+  watch: { bg: "#eff6ff", border: "#3b82f6", pulse: false },
+};
+
+// ── Community report marker ───────────────────────────────────────────────────
+const createReportIcon = (type, severity) => {
+  const s = TYPE_STYLE[type?.toLowerCase()] || TYPE_STYLE.other;
+
   const iconDef = ICON_SVGS[type?.toLowerCase()] || ICON_SVGS.other;
-  const { path: svgPath, color } = iconDef;
-  const coloredSvg = svgPath.replace('stroke="currentColor"', `stroke="${color}"`);
+
+  const coloredSvg = iconDef.path.replace(
+    'stroke="currentColor"',
+    `stroke="${s.icon}"`,
+  );
+  const shouldPulse = s.pulse || severity === "high";
 
   return L.divIcon({
     className: "custom-report-marker",
     html: `
-      <div style="
-        background: white;
-        border: 3px solid ${color};
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-      ">
-        ${coloredSvg}
+      <div style="position:relative;width:40px;height:40px;">
+        ${shouldPulse ? `<div class="report-marker-pulse" style="position:absolute;inset:0;border-radius:50%;border:2px solid ${s.border};opacity:0.4;"></div>` : ""}
+        <div style="position:absolute;inset:0;background:${s.bg};border:2.5px solid ${s.border};border-radius:50%;display:flex;align-items:center;justify-content:center;">
+          ${coloredSvg}
+        </div>
       </div>
-      ${type === "rescue" ? `
-        <div style="
-          position: absolute; top: -4px; right: -4px;
-          width: 12px; height: 12px;
-          background: #ef4444; border: 2px solid white; border-radius: 50%;
-          animation: pulse 2s infinite;
-        "></div>
-      ` : ""}
     `,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -101,36 +121,28 @@ const createReportIcon = (type) => {
   });
 };
 
-// ── Official alert marker (solid fill, white icon) ───────────────────────────
-const createAlertIcon = (type) => {
+// ── Official alert marker ─────────────────────────────────────────────────────
+const createAlertIcon = (type, severity) => {
+  const s = ALERT_SEVERITY_STYLE[severity] ?? {
+    bg: "#f9fafb",
+    border: "#6b7280",
+    pulse: false,
+  };
   const iconDef = ICON_SVGS[type?.toLowerCase()] || ICON_SVGS.other;
-  const { path: svgPath, color } = iconDef;
-  const whiteSvg = svgPath.replace('stroke="currentColor"', 'stroke="white"');
+  const coloredSvg = iconDef.path.replace(
+    'stroke="currentColor"',
+    `stroke="${s.border}"`,
+  );
 
   return L.divIcon({
     className: "custom-alert-marker",
     html: `
-      <div style="
-        background: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        width: 38px;
-        height: 38px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 14px rgba(0,0,0,0.3);
-      ">
-        ${whiteSvg}
+      <div style="position:relative;width:38px;height:38px;">
+        ${s.pulse ? `<div class="report-marker-pulse" style="position:absolute;inset:0;border-radius:50%;border:2px solid ${s.border};opacity:0.4;"></div>` : ""}
+        <div style="position:absolute;inset:0;background:${s.bg};border:2.5px solid ${s.border};border-radius:50%;display:flex;align-items:center;justify-content:center;">
+          ${coloredSvg}
+        </div>
       </div>
-      ${type === "rescue" ? `
-        <div style="
-          position: absolute; top: -4px; right: -4px;
-          width: 12px; height: 12px;
-          background: #dc2626; border: 2px solid white; border-radius: 50%;
-          animation: pulse 2s infinite;
-        "></div>
-      ` : ""}
     `,
     iconSize: [38, 38],
     iconAnchor: [19, 19],
@@ -141,11 +153,12 @@ const createAlertIcon = (type) => {
 // ── Shared CSS ────────────────────────────────────────────────────────────────
 const style = document.createElement("style");
 style.textContent = `
-  @keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.3); opacity: 0.7; }
-    100% { transform: scale(1); opacity: 1; }
+  @keyframes report-marker-pulse {
+    0%   { transform: scale(1);    opacity: 1; }
+    50%  { transform: scale(1.35); opacity: 0.6; }
+    100% { transform: scale(1);    opacity: 1; }
   }
+  .report-marker-pulse { animation: report-marker-pulse 1.8s ease-in-out infinite; }
   .report-popup { font-family: system-ui, -apple-system, sans-serif; }
   .report-popup img { cursor: pointer; transition: transform 0.2s; }
   .report-popup img:hover { transform: scale(1.05); }
@@ -172,32 +185,56 @@ function isLocalDevicePath(src) {
 
 // ── Extract coordinates from a report object ──────────────────────────────────
 function extractCoordinates(report) {
-  const toNum = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-  const valid  = (lat, lng) =>
-    lat !== null && lng !== null && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const toNum = (v) => {
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  };
+  const valid = (lat, lng) =>
+    lat !== null &&
+    lng !== null &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180;
 
-  { const lat = toNum(report.latitude);  const lng = toNum(report.longitude); if (valid(lat, lng)) return [lat, lng]; }
+  {
+    const lat = toNum(report.latitude);
+    const lng = toNum(report.longitude);
+    if (valid(lat, lng)) return [lat, lng];
+  }
 
   if (report.location) {
     const loc = report.location;
-    { const lat = toNum(loc.lat);       const lng = toNum(loc.lng);       if (valid(lat, lng)) return [lat, lng]; }
-    { const lat = toNum(loc.latitude);  const lng = toNum(loc.longitude); if (valid(lat, lng)) return [lat, lng]; }
+    {
+      const lat = toNum(loc.lat);
+      const lng = toNum(loc.lng);
+      if (valid(lat, lng)) return [lat, lng];
+    }
+    {
+      const lat = toNum(loc.latitude);
+      const lng = toNum(loc.longitude);
+      if (valid(lat, lng)) return [lat, lng];
+    }
     if (loc.coordinates && !Array.isArray(loc.coordinates)) {
-      const lat = toNum(loc.coordinates.latitude); const lng = toNum(loc.coordinates.longitude);
+      const lat = toNum(loc.coordinates.latitude);
+      const lng = toNum(loc.coordinates.longitude);
       if (valid(lat, lng)) return [lat, lng];
     }
     if (Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
-      const lng = toNum(loc.coordinates[0]); const lat = toNum(loc.coordinates[1]);
+      const lng = toNum(loc.coordinates[0]);
+      const lat = toNum(loc.coordinates[1]);
       if (valid(lat, lng)) return [lat, lng];
     }
     if (Array.isArray(loc) && loc.length >= 2) {
-      const lat = toNum(loc[0]); const lng = toNum(loc[1]);
+      const lat = toNum(loc[0]);
+      const lng = toNum(loc[1]);
       if (valid(lat, lng)) return [lat, lng];
     }
   }
 
   if (report.coords) {
-    const lat = toNum(report.coords.latitude); const lng = toNum(report.coords.longitude);
+    const lat = toNum(report.coords.latitude);
+    const lng = toNum(report.coords.longitude);
     if (valid(lat, lng)) return [lat, lng];
   }
 
@@ -207,11 +244,16 @@ function extractCoordinates(report) {
 // ── Report popup HTML ─────────────────────────────────────────────────────────
 function createReportPopup(report) {
   const time = new Date(report.timestamp).toLocaleString("en-PH", {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   const location =
-    report.location?.exactAddress || report.location?.barangay || "Location not specified";
+    report.location?.exactAddress ||
+    report.location?.barangay ||
+    "Location not specified";
   const userName = report.userData?.fullName || report.userName || "Anonymous";
 
   const images = report.images || [];
@@ -220,9 +262,14 @@ function createReportPopup(report) {
   const hasImages = remoteImages.length > 0;
 
   const severityColors = {
-    high:   { bg: "#fee2e2", color: "#991b1b", dot: "#ef4444", label: "HIGH"   },
-    medium: { bg: "#fef3c7", color: "#92400e", dot: "#f59e0b", label: "MEDIUM" },
-    low:    { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", label: "LOW"    },
+    high: { bg: "#fee2e2", color: "#991b1b", dot: "#ef4444", label: "HIGH" },
+    medium: {
+      bg: "#fef3c7",
+      color: "#92400e",
+      dot: "#f59e0b",
+      label: "MEDIUM",
+    },
+    low: { bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6", label: "LOW" },
   };
   const sev = severityColors[report.severity?.toLowerCase()];
   const severityHtml = sev
@@ -241,18 +288,24 @@ function createReportPopup(report) {
         </h3>
         ${severityHtml}
       </div>
-      ${hasImages ? `
+      ${
+        hasImages
+          ? `
         <div style="margin-bottom:12px;">
           <img src="${remoteImages[0]}" alt="Report"
             onclick="window.open('${remoteImages[0]}', '_blank')"
             style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);" />
           ${remoteImages.length > 1 ? `<p style="font-size:11px;color:#6b7280;margin-top:4px;text-align:center;">+${remoteImages.length - 1} more image(s)</p>` : ""}
         </div>
-      ` : hasLocalOnlyImages ? `
+      `
+          : hasLocalOnlyImages
+            ? `
         <div style="background:#f3f4f6;border-radius:8px;padding:12px;margin-bottom:12px;text-align:center;color:#6b7280;font-size:12px;">
           <p style="margin:0;">Image saved on device only — not uploaded to server</p>
         </div>
-      ` : ""}
+      `
+            : ""
+      }
       <p style="font-size:14px;margin:12px 0;color:#374151;line-height:1.5;">
         ${report.description || "No description provided"}
       </p>
@@ -270,12 +323,16 @@ function createReportPopup(report) {
           <span style="color:#1f2937;">${userName}</span>
         </div>
       </div>
-      ${report.emergencyType === "rescue" ? `
+      ${
+        report.emergencyType === "rescue"
+          ? `
         <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:8px 12px;border-radius:4px;margin-top:12px;display:flex;align-items:center;gap:8px;">
           ${SIREN_ICON}
           <p style="margin:0;font-size:13px;color:#991b1b;font-weight:600;">RESCUE NEEDED — Urgent response required</p>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
       <p style="font-size:10px;color:#9ca3af;margin-top:12px;margin-bottom:0;text-align:right;">
         Report ID: ${report._id?.slice(-6) || "N/A"}
       </p>
@@ -287,20 +344,29 @@ function createAlertPopup(alert) {
   const isRescue = alert.type === "rescue";
   const sevMap = {
     evacuate: { bg: "#fee2e2", color: "#991b1b", label: "EVACUATE" },
-    warning:  { bg: "#fef3c7", color: "#92400e", label: "WARNING"  },
-    watch:    { bg: "#dbeafe", color: "#1e40af", label: "WATCH"    },
+    warning: { bg: "#fef3c7", color: "#92400e", label: "WARNING" },
+    watch: { bg: "#dbeafe", color: "#1e40af", label: "WATCH" },
   };
   const sev = isRescue
     ? { bg: "#fee2e2", color: "#991b1b", label: "🚨 RESCUE" }
-    : (sevMap[alert.severity] ?? { bg: "#f3f4f6", color: "#374151", label: (alert.severity ?? "—").toUpperCase() });
+    : (sevMap[alert.severity] ?? {
+        bg: "#f3f4f6",
+        color: "#374151",
+        label: (alert.severity ?? "—").toUpperCase(),
+      });
 
   const time = alert.createdAt
     ? new Date(alert.createdAt).toLocaleString("en-PH", {
-        timeZone: "Asia/Manila", month: "short", day: "numeric",
-        hour: "2-digit", minute: "2-digit",
+        timeZone: "Asia/Manila",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : "";
-  const typeLabel = alert.type ? alert.type.charAt(0).toUpperCase() + alert.type.slice(1) : "";
+  const typeLabel = alert.type
+    ? alert.type.charAt(0).toUpperCase() + alert.type.slice(1)
+    : "";
 
   return `
     <div style="font-family:system-ui,sans-serif;min-width:230px;max-width:280px">
@@ -317,14 +383,22 @@ function createAlertPopup(alert) {
       <p style="font-size:12px;color:#374151;margin:0 0 8px;line-height:1.5">
         ${alert.description ?? ""}
       </p>
-      ${alert.location ? `
+      ${
+        alert.location
+          ? `
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
           ${PIN_ICON}<span style="font-size:11px;color:#9ca3af;">${alert.location}</span>
-        </div>` : ""}
-      ${time ? `
+        </div>`
+          : ""
+      }
+      ${
+        time
+          ? `
         <div style="display:flex;gap:6px;align-items:center;">
           ${CLOCK_ICON}<span style="font-size:10px;color:#9ca3af;">${time}</span>
-        </div>` : ""}
+        </div>`
+          : ""
+      }
       <p style="font-size:9px;color:#d1d5db;margin-top:10px;margin-bottom:0;text-align:right;
                 letter-spacing:0.05em;">OFFICIAL ALERT</p>
     </div>`;
@@ -334,12 +408,12 @@ function createAlertPopup(alert) {
 export default function ReportsLayer({ visible, filters = {} }) {
   const map = useMap();
   const [reports, setReports] = useState([]);
-  const [alerts,  setAlerts]  = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const markersLayerRef = useRef(null);
 
   const fetchApprovedReports = async () => {
     try {
-      const res  = await fetch(`${API_BASE}/api/reports/approved`);
+      const res = await fetch(`${API_BASE}/api/reports/approved`);
       const data = await res.json();
       if (data.success && data.reports) setReports(data.reports);
     } catch {}
@@ -348,28 +422,38 @@ export default function ReportsLayer({ visible, filters = {} }) {
   const fetchAlerts = async () => {
     try {
       const token = localStorage.getItem("token") ?? "";
-      const res  = await fetch(`${API_BASE}/api/alerts`, {
+      const res = await fetch(`${API_BASE}/api/alerts`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      const active = (data.alerts ?? []).filter((a) => a.lat != null && a.lng != null);
+      const active = (data.alerts ?? []).filter(
+        (a) => a.lat != null && a.lng != null,
+      );
       setAlerts(active);
     } catch {}
   };
 
   // Memoize so markers aren't rebuilt on every parent re-render (e.g. clock tick)
   const filteredReports = useMemo(() => {
-    if (!filters.types || filters.types.length === 0 || filters.types.includes("all")) {
+    if (
+      !filters.types ||
+      filters.types.length === 0 ||
+      filters.types.includes("all")
+    ) {
       return reports;
     }
-    return reports.filter((r) => filters.types.includes(r.emergencyType?.toLowerCase()));
+    return reports.filter((r) =>
+      filters.types.includes(r.emergencyType?.toLowerCase()),
+    );
   }, [reports, filters]);
 
   // Initialize markers layer
   useEffect(() => {
     if (!map) return;
     markersLayerRef.current = L.layerGroup().addTo(map);
-    return () => { if (markersLayerRef.current) map.removeLayer(markersLayerRef.current); };
+    return () => {
+      if (markersLayerRef.current) map.removeLayer(markersLayerRef.current);
+    };
   }, [map]);
 
   // Rebuild markers when visibility, reports, alerts, or filters change
@@ -383,16 +467,26 @@ export default function ReportsLayer({ visible, filters = {} }) {
       const coords = extractCoordinates(report);
       if (!coords) return;
 
-      const marker = L.marker(coords, { icon: createReportIcon(report.emergencyType) });
-      marker.bindPopup(createReportPopup(report), { maxWidth: 300, minWidth: 250 });
+      const marker = L.marker(coords, {
+        icon: createReportIcon(report.emergencyType, report.severity),
+      });
+      marker.bindPopup(createReportPopup(report), {
+        maxWidth: 300,
+        minWidth: 250,
+      });
       marker.on("click", (e) => L.DomEvent.stop(e.originalEvent));
       marker.addTo(markersLayerRef.current);
     });
 
     // Official alerts (merged from AlertsLayer)
     alerts.forEach((alert) => {
-      const marker = L.marker([alert.lat, alert.lng], { icon: createAlertIcon(alert.type) });
-      marker.bindPopup(createAlertPopup(alert), { maxWidth: 300, minWidth: 250 });
+      const marker = L.marker([alert.lat, alert.lng], {
+        icon: createAlertIcon(alert.type, alert.severity),
+      });
+      marker.bindPopup(createAlertPopup(alert), {
+        maxWidth: 300,
+        minWidth: 250,
+      });
       marker.on("click", (e) => L.DomEvent.stop(e.originalEvent));
       marker.addTo(markersLayerRef.current);
     });
@@ -418,13 +512,15 @@ export default function ReportsLayer({ visible, filters = {} }) {
       setReports((prev) => {
         if (status === "approved") {
           const exists = prev.some((r) => r._id === reportId);
-          return exists ? prev.map((r) => (r._id === reportId ? report : r)) : [...prev, report];
+          return exists
+            ? prev.map((r) => (r._id === reportId ? report : r))
+            : [...prev, report];
         }
         return prev.filter((r) => r._id !== reportId);
       });
     });
 
-    socket.on("new_alert",     fetchAlerts);
+    socket.on("new_alert", fetchAlerts);
     socket.on("alert_updated", fetchAlerts);
 
     const refreshInterval = setInterval(() => {
@@ -435,7 +531,7 @@ export default function ReportsLayer({ visible, filters = {} }) {
     return () => {
       socket.off("new_emergency_report");
       socket.off("report_status_updated");
-      socket.off("new_alert",     fetchAlerts);
+      socket.off("new_alert", fetchAlerts);
       socket.off("alert_updated", fetchAlerts);
       clearInterval(refreshInterval);
     };

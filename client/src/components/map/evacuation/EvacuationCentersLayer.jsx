@@ -16,64 +16,64 @@ async function apiFetch(path) {
 // Per-center coordinates for Muntindilaw and Mayamot (exact, manually set).
 // All other barangays fall back to BARANGAY_COORDS below.
 const CENTER_COORDS = {
-  "Puno Multipurpose Hall – Rescue Bldg.":        [14.6232, 121.1640],
-  "Muntindilaw National High School":              [14.6218, 121.1672],
-  "Muntindilaw Daycare Center":                    [14.6230, 121.1643],
-  "Muntindilaw Elementary School":                 [14.6235, 121.1650],
-  "Area 4B Basketball Open Court":                 [14.6288, 121.1708],
-  "Skylark St. Vista Verde Bldg.":                 [14.6178, 121.1663],
-  "Saint Martin De Porres":                        [14.6255, 121.1658],
-  "Sitio Mahayahay Open Court BC":                 [14.6298, 121.1718],
-  "KB 4 Open Area Basketball Court":               [14.6283, 121.1703],
-  "Village East Clubhouse Basketball Court":       [14.6162, 121.1628],
-  "Vista Verde Executive Basketball Court":        [14.6173, 121.1668],
-  "Kingsville Evacuation Center (City Manage)":   [14.6005, 121.1885],
-  "Mayamot Elementary School Covered Court":       [14.5975, 121.1848],
-  "Mayamot Daycare Center":                        [14.5968, 121.1840],
+  "Puno Multipurpose Hall – Rescue Bldg.": [14.6232, 121.164],
+  "Muntindilaw National High School": [14.6218, 121.1672],
+  "Muntindilaw Daycare Center": [14.623, 121.1643],
+  "Muntindilaw Elementary School": [14.6235, 121.165],
+  "Area 4B Basketball Open Court": [14.6288, 121.1708],
+  "Skylark St. Vista Verde Bldg.": [14.6178, 121.1663],
+  "Saint Martin De Porres": [14.6255, 121.1658],
+  "Sitio Mahayahay Open Court BC": [14.6298, 121.1718],
+  "KB 4 Open Area Basketball Court": [14.6283, 121.1703],
+  "Village East Clubhouse Basketball Court": [14.6162, 121.1628],
+  "Vista Verde Executive Basketball Court": [14.6173, 121.1668],
+  "Kingsville Evacuation Center (City Manage)": [14.6005, 121.1885],
+  "Mayamot Elementary School Covered Court": [14.5975, 121.1848],
+  "Mayamot Daycare Center": [14.5968, 121.184],
 };
 
 // Approximate barangay center coordinates — used as fallback for seeded centers
 // that don't yet have specific lat/lng stored in the database.
 const BARANGAY_COORDS = {
-  bagongnayon:  [14.6340, 121.1740],
-  beverlyhills: [14.5820, 121.1440],
-  calawis:      [14.6480, 121.2570],
-  cupang:       [14.5580, 121.1860],
-  dalig:        [14.5500, 121.1750],
-  delapaz:      [14.5970, 121.1530],
-  inarawan:     [14.6250, 121.2340],
-  mambugan:     [14.5720, 121.1820],
-  mayamot:      [14.5985, 121.1860],
-  muntindilaw:  [14.6235, 121.1650],
-  sanisidro:    [14.6090, 121.1590],
-  sanjose:      [14.6380, 121.1810],
-  sanjuan:      [14.6190, 121.1980],
-  sanluis:      [14.6060, 121.2040],
-  sanroque:     [14.6210, 121.1730],
-  santacruz:    [14.6260, 121.1900],
-  private:      [14.5880, 121.1760],
+  bagongnayon: [14.634, 121.174],
+  beverlyhills: [14.582, 121.144],
+  calawis: [14.648, 121.257],
+  cupang: [14.558, 121.186],
+  dalig: [14.55, 121.175],
+  delapaz: [14.597, 121.153],
+  inarawan: [14.625, 121.234],
+  mambugan: [14.572, 121.182],
+  mayamot: [14.5985, 121.186],
+  muntindilaw: [14.6235, 121.165],
+  sanisidro: [14.609, 121.159],
+  sanjose: [14.638, 121.181],
+  sanjuan: [14.619, 121.198],
+  sanluis: [14.606, 121.204],
+  sanroque: [14.621, 121.173],
+  santacruz: [14.626, 121.19],
+  private: [14.588, 121.176],
 };
 
 function statusOf(center) {
   if (!center.capacity || center.occupancy === 0) return "vacant";
   const pct = center.occupancy / center.capacity;
-  if (pct >= 1)   return "full";
+  if (pct >= 1) return "full";
   if (pct >= 0.8) return "nearFull";
   return "active";
 }
 
 const STATUS_COLOR = {
-  full:     "#ef4444",
+  full: "#ef4444",
   nearFull: "#f97316",
-  active:   "#22c55e",
-  vacant:   "#94a3b8",
+  active: "#22c55e",
+  vacant: "#94a3b8",
 };
 
 const STATUS_LABEL = {
-  full:     "Full",
+  full: "Full",
   nearFull: "Near Full",
-  active:   "Active",
-  vacant:   "Vacant",
+  active: "Active",
+  vacant: "Vacant",
 };
 
 const TENT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15 8.5 21"/><path d="M2 21h20"/></svg>`;
@@ -81,9 +81,9 @@ const TENT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
 function createTentIcon(color) {
   return L.divIcon({
     className: "",
-    html: `<div style="width:32px;height:32px;border-radius:50%;background:${color};border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">${TENT_SVG}</div>`,
-    iconSize:    [32, 32],
-    iconAnchor:  [16, 16],
+    html: `<div style="width:32px;height:32px;border-radius:50%;background:${color};border:2.5px solid white;display:flex;align-items:center;justify-content:center;">${TENT_SVG}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
     popupAnchor: [0, -20],
   });
 }
@@ -124,23 +124,18 @@ export default function EvacuationCentersLayer({ visible }) {
     const coords =
       center.lat != null && center.lng != null
         ? [center.lat, center.lng]
-        : CENTER_COORDS[center.name]
-        ?? BARANGAY_COORDS[center.barangay];
+        : (CENTER_COORDS[center.name] ?? BARANGAY_COORDS[center.barangay]);
 
     if (!coords) return null;
 
     const status = statusOf(center);
-    const color  = STATUS_COLOR[status];
-    const pct    = center.capacity
+    const color = STATUS_COLOR[status];
+    const pct = center.capacity
       ? Math.round((center.occupancy / center.capacity) * 100)
       : 0;
 
     return (
-      <Marker
-        key={center._id}
-        position={coords}
-        icon={createTentIcon(color)}
-      >
+      <Marker key={center._id} position={coords} icon={createTentIcon(color)}>
         <Popup>
           <div style={{ minWidth: 180 }}>
             <p style={{ fontWeight: 700, marginBottom: 4, fontSize: 13 }}>
@@ -151,13 +146,13 @@ export default function EvacuationCentersLayer({ visible }) {
             </p>
             <div
               style={{
-                display:      "inline-block",
-                padding:      "2px 8px",
+                display: "inline-block",
+                padding: "2px 8px",
                 borderRadius: 12,
-                background:   color,
-                color:        "#fff",
-                fontSize:     11,
-                fontWeight:   600,
+                background: color,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 600,
                 marginBottom: 6,
               }}
             >
@@ -171,7 +166,9 @@ export default function EvacuationCentersLayer({ visible }) {
             </p>
             {center.barangay && (
               <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
-                Brgy. {center.barangay.charAt(0).toUpperCase() + center.barangay.slice(1)}
+                Brgy.{" "}
+                {center.barangay.charAt(0).toUpperCase() +
+                  center.barangay.slice(1)}
               </p>
             )}
           </div>
