@@ -11,7 +11,7 @@ import alertRoutes from "./routes/alerts.js";
 import reportRoutes from "./routes/reports.js";
 import evacuationRoutes from "./routes/evacuation.js";
 import communityRoutes from "./routes/community.js";
-import pushRoutes from "./routes/push.js";
+import pushRoutes, { sendPushToAll } from "./routes/push.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
@@ -85,7 +85,7 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
-// Receives push from mobile app and broadcasts via Socket.IO
+// Receives push from mobile app and broadcasts via Socket.IO + web push
 app.post("/api/notify-emergency", (req, res) => {
   const report = req.body;
   io.emit("new_emergency_report", {
@@ -101,6 +101,18 @@ app.post("/api/notify-emergency", (req, res) => {
     description: report.description || "",
     status: "pending",
   });
+
+  const emergencyType = report.emergencyType || "Emergency";
+  const severity = report.severity ? ` (${report.severity})` : "";
+  const locationLabel = report.barangay || report.location || "Unknown location";
+  sendPushToAll({
+    title: `New Report: ${emergencyType}${severity}`,
+    body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
+    url: "/reports",
+    tag: `report-${report.reportId}`,
+    urgent: true,
+  }).catch((err) => console.error("[Push] Report notification failed:", err));
+
   res.json({ success: true });
 });
 
@@ -156,6 +168,15 @@ app.post("/api/reports/update-status", async (req, res) => {
         };
         const alertResult = await mongoose.connection.db.collection("alerts").insertOne(alertDoc);
         io.emit("new_alert", { ...alertDoc, _id: alertResult.insertedId });
+
+        const isUrgent = alertSeverity === "evacuate" || alertSeverity === "critical";
+        sendPushToAll({
+          title: `Alert: Community Report — ${typeName}`,
+          body: `${alertDoc.location}: ${alertDoc.message.slice(0, 100)}`,
+          url: "/alerts",
+          tag: `community-report-${reportId}`,
+          urgent: isUrgent,
+        }).catch((err) => console.error("[Push] Approved report alert push failed:", err));
       }
 
       res.json({ success: true });
