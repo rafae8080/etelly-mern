@@ -1,49 +1,11 @@
 import express from "express";
 import {
   getCached, getCachedStale, setCached, TTL,
-  fetchOpenMeteo, fetchRainfallHourly, fetchLandslideData,
+  fetchRainfallHourly,
   classifyRainfallIntensity, findCurrentHourIndex,
 } from "../services/openMeteoCache.js";
 
 const router = express.Router();
-
-// ── Antipolo flood risk zones ─────────────────────────────────────────────────
-const ANTIPOLO_ZONES = [
-  { lat: 14.5855, lng: 121.158, risk: 3, name: "Brgy. San Roque, Antipolo" },
-  { lat: 14.591,  lng: 121.163, risk: 3, name: "Brgy. Dela Paz, Antipolo" },
-  { lat: 14.578,  lng: 121.152, risk: 3, name: "Brgy. San Jose, Antipolo" },
-  { lat: 14.572,  lng: 121.148, risk: 2, name: "Brgy. Cupang, Antipolo" },
-  { lat: 14.566,  lng: 121.142, risk: 2, name: "Brgy. Mayamot, Antipolo" },
-  { lat: 14.601,  lng: 121.171, risk: 2, name: "Brgy. Mambugan, Antipolo" },
-  { lat: 14.595,  lng: 121.165, risk: 1, name: "Brgy. Inarawan, Antipolo" },
-  { lat: 14.583,  lng: 121.17,  risk: 3, name: "Hinulugang Taktak Corridor" },
-  { lat: 14.576,  lng: 121.139, risk: 2, name: "Brgy. San Isidro, Antipolo" },
-  { lat: 14.608,  lng: 121.18,  risk: 1, name: "Brgy. Dalig, Antipolo" },
-];
-
-// ── GET /api/hazard/flood-zones ───────────────────────────────────────────────
-router.get("/flood-zones", (_req, res) => {
-  res.json({ zones: ANTIPOLO_ZONES });
-});
-
-// ── GET /api/hazard/flood ─────────────────────────────────────────────────────
-// Single-point Open-Meteo flood API proxy (river discharge forecast).
-router.get("/flood", async (req, res) => {
-  try {
-    const { lat = 14.5882, lon = 121.1763 } = req.query;
-    const url =
-      `https://flood-api.open-meteo.com/v1/flood` +
-      `?latitude=${lat}&longitude=${lon}` +
-      `&daily=river_discharge_max&forecast_days=7&models=seamless_v4`;
-
-    const result = await fetchOpenMeteo(url, `flood_${lat}_${lon}`, TTL.FLOOD);
-    if (!result) return res.status(503).json({ error: "Rate limited by upstream API. Try again shortly." });
-    res.json(result.data);
-  } catch (err) {
-    console.error("❌ Flood API error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ── GET /api/hazard/flood-forecast ────────────────────────────────────────────
 // 7-day rainfall forecast for Antipolo City — feeds FloodForecastPanel.
@@ -131,20 +93,6 @@ router.get("/rainfall-hourly", async (req, res) => {
   }
 });
 
-// ── GET /api/hazard/flood-combined ────────────────────────────────────────────
-// Static Antipolo flood risk zones (no river discharge enrichment).
-router.get("/flood-combined", (_req, res) => {
-  try {
-    const CACHE_KEY = "flood_combined";
-    let cached = getCached(CACHE_KEY);
-    if (cached) return res.json(cached);
-    const result = { zones: ANTIPOLO_ZONES };
-    setCached(CACHE_KEY, result, TTL.FLOOD_COMBINED);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ── GDACS RSS helpers ─────────────────────────────────────────────────────────
 // The GDACS GeoJSON API consistently returns maxwind=0/null even for Cat-5
@@ -342,107 +290,5 @@ function estimateWindRadius(windKph) {
   return 40;
 }
 
-// ── Antipolo landslide susceptibility zones ───────────────────────────────────
-const LANDSLIDE_ZONES = [
-  { lat: 14.622, lng: 121.198, risk: 3, name: "Brgy. Dalig (upper slope)" },
-  { lat: 14.565, lng: 121.210, risk: 3, name: "Brgy. Calawis, Antipolo" },
-  { lat: 14.615, lng: 121.187, risk: 3, name: "Brgy. San Jose (hillside)" },
-  { lat: 14.607, lng: 121.182, risk: 3, name: "Brgy. Mambugan (ridge)" },
-  { lat: 14.598, lng: 121.175, risk: 2, name: "Brgy. Inarawan (slope)" },
-  { lat: 14.591, lng: 121.168, risk: 2, name: "Brgy. Dela Paz (hillside)" },
-  { lat: 14.583, lng: 121.172, risk: 3, name: "Hinulugang Taktak escarpment" },
-  { lat: 14.576, lng: 121.162, risk: 2, name: "Brgy. San Roque (mid-slope)" },
-  { lat: 14.568, lng: 121.155, risk: 2, name: "Brgy. Cupang (elevated)" },
-  { lat: 14.574, lng: 121.141, risk: 2, name: "Brgy. San Isidro (steep slope)" },
-];
-
-const LANDSLIDE_RAINFALL_THRESHOLDS = {
-  low:      { day1:  50, day3: 100 },
-  moderate: { day1:  35, day3:  70 },
-  high:     { day1:  20, day3:  50 },
-};
-
-const SOIL_SATURATION_THRESHOLD = 0.35;
-
-function classifyLandslideRisk(rainfall24h, rainfall72h, soilMoisture, slopeRisk) {
-  const threshold =
-    slopeRisk === 3 ? LANDSLIDE_RAINFALL_THRESHOLDS.high :
-    slopeRisk === 2 ? LANDSLIDE_RAINFALL_THRESHOLDS.moderate :
-                     LANDSLIDE_RAINFALL_THRESHOLDS.low;
-
-  const soilSaturated  = soilMoisture >= SOIL_SATURATION_THRESHOLD;
-  const rainfallTrigger = rainfall24h >= threshold.day1 || rainfall72h >= threshold.day3;
-
-  if (slopeRisk === 3 && rainfallTrigger && soilSaturated)
-    return { label: "Critical", level: 3, color: "#dc2626" };
-  if (slopeRisk >= 2 && (rainfallTrigger || soilSaturated))
-    return { label: "Warning",  level: 2, color: "#f97316" };
-  if (slopeRisk >= 1 && rainfall24h >= threshold.day1 * 0.5)
-    return { label: "Watch",    level: 1, color: "#f59e0b" };
-  return               { label: "Low",     level: 0, color: "#22c55e" };
-}
-
-// ── GET /api/hazard/landslide-zones ──────────────────────────────────────────
-router.get("/landslide-zones", (_req, res) => {
-  res.json({ zones: LANDSLIDE_ZONES });
-});
-
-// ── GET /api/hazard/landslide ─────────────────────────────────────────────────
-router.get("/landslide", async (req, res) => {
-  try {
-    const { lat = 14.5882, lon = 121.1763 } = req.query;
-
-    const result = await fetchLandslideData(lat, lon);
-    if (!result) return res.status(503).json({ error: "Rate limited by upstream API. Try again shortly." });
-    const { data, stale: isStale } = result;
-
-    const dailyDates = data.daily?.time                          ?? [];
-    const precipSum  = data.daily?.precipitation_sum             ?? [];
-    const precipProb = data.daily?.precipitation_probability_max ?? [];
-    const soilTop    = data.hourly?.soil_moisture_0_to_7cm       ?? [];
-    const soilDeep   = data.hourly?.soil_moisture_7_to_28cm      ?? [];
-
-    const latestSoilTop   = soilTop.filter(Boolean).at(-1)  ?? 0;
-    const latestSoilDeep  = soilDeep.filter(Boolean).at(-1) ?? 0;
-    const avgSoilMoisture = (latestSoilTop + latestSoilDeep) / 2;
-
-    const todayIdx   = 3; // past_days=3
-    const rainfall24h = precipSum[todayIdx] ?? 0;
-    const rainfall72h = (precipSum.slice(todayIdx - 2, todayIdx + 1) ?? [])
-      .reduce((a, b) => a + (b ?? 0), 0);
-
-    const zones = LANDSLIDE_ZONES.map((zone) => ({
-      ...zone,
-      riskAssessment: classifyLandslideRisk(rainfall24h, rainfall72h, avgSoilMoisture, zone.risk),
-    }));
-
-    const maxLevel   = Math.max(...zones.map((z) => z.riskAssessment.level));
-    const overallRisk =
-      zones.find((z) => z.riskAssessment.level === maxLevel)?.riskAssessment ??
-      { label: "Low", level: 0, color: "#22c55e" };
-
-    res.json({
-      overallRisk,
-      zones,
-      current: {
-        rainfall24h,
-        rainfall72h,
-        soilMoisture:  parseFloat(avgSoilMoisture.toFixed(4)),
-        soilSaturated: avgSoilMoisture >= SOIL_SATURATION_THRESHOLD,
-      },
-      forecast: {
-        dates:                       dailyDates.slice(todayIdx),
-        precipitation_sum:           precipSum.slice(todayIdx),
-        precipitation_probability_max: precipProb.slice(todayIdx),
-      },
-      thresholds:  LANDSLIDE_RAINFALL_THRESHOLDS,
-      generatedAt: new Date().toISOString(),
-      ...(isStale && { stale: true }),
-    });
-  } catch (err) {
-    console.error("❌ Landslide API error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 export default router;

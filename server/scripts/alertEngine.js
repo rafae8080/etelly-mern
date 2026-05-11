@@ -13,10 +13,11 @@
 import cron from "node-cron";
 import Alert from "../models/Alert.js";
 import { runFloodEvacuationCheck, runHeavyRainfallCheck } from "../services/floodAlerts.js";
-import { runLandslideCheck }  from "../services/landslideAlerts.js";
-import { runEarthquakeCheck } from "../services/earthquakeAlerts.js";
-import { runTyphoonCheck }    from "../services/typhoonAlerts.js";
-import { runGDACSCheck }      from "../services/gdacsAlerts.js";
+import { runLandslideCheck }       from "../services/landslideAlerts.js";
+import { runEarthquakeCheck }      from "../services/earthquakeAlerts.js";
+import { runTyphoonCheck }         from "../services/typhoonAlerts.js";
+import { runGDACSCheck }           from "../services/gdacsAlerts.js";
+import { runInventoryAlertCheck }  from "../services/inventoryAlerts.js";
 
 async function runExpiryCleanup() {
   try {
@@ -55,6 +56,7 @@ export function startAlertEngine() {
   setTimeout(runSystemChecks, 2000); // cache-backed — safe on startup
   setTimeout(runAgencyChecks, 7000); // staggered so cache is warm first
 
-  cron.schedule("*/15 * * * *", runSystemChecks, { scheduled: true, timezone: "Asia/Manila" });
-  cron.schedule("*/30 * * * *", runAgencyChecks, { scheduled: true, timezone: "Asia/Manila" });
+  cron.schedule("*/15 * * * *", runSystemChecks,         { scheduled: true, timezone: "Asia/Manila" });
+  cron.schedule("*/30 * * * *", runAgencyChecks,         { scheduled: true, timezone: "Asia/Manila" });
+  cron.schedule("0 8 * * *",    runInventoryAlertCheck,  { scheduled: true, timezone: "Asia/Manila" });
 }

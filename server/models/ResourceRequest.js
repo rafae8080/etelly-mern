@@ -25,9 +25,6 @@ const ResourceRequestSchema = new mongoose.Schema({
   // Workflow
   status: { type: String, enum: ["pending", "approved", "rejected", "fulfilled", "cancelled"], default: "pending" },
 
-  // Set at creation if another request from same address+category is already active
-  householdFlag: { type: Boolean, default: false },
-
   // Full audit trail
   actionLog: [actionLogSchema],
 }, { timestamps: true });

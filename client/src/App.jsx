@@ -11,37 +11,10 @@ import HazardMapPage from "./pages/HazardMapPage";
 import EvacuationPage from "./pages/EvacuationPage";
 import CommunitySharingPage from "./pages/CommunitySharingPage";
 import SafetyTipsPage from "./pages/SafetyTipsPage";
+import SafetyTipDetailPage from "./pages/SafetyTipDetailPage";
 import ResourcesPage from "./pages/ResourcesPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ReportsPage from "./pages/ReportPage";
-
-// ---- START OF TEST CODE — delete from here ----
-import { usePushNotifications } from "./hooks/usePushNotifications";
-function PushTestPage() {
-  const { permission, subscribed, loading, isSupported, subscribe, unsubscribe } =
-    usePushNotifications();
-  const sendTest = () =>
-    fetch("/api/push/test", { method: "POST" }).then((r) => r.json()).then(alert);
-  return (
-    <div style={{ padding: 40, fontFamily: "sans-serif" }}>
-      <h2>Push Notification Test</h2>
-      <p>Supported: {String(isSupported)}</p>
-      <p>Permission: {permission}</p>
-      <p>Subscribed: {String(subscribed)}</p>
-      <br />
-      <button onClick={subscribed ? unsubscribe : subscribe} disabled={loading}
-        style={{ marginRight: 12, padding: "8px 16px" }}>
-        {loading ? "..." : subscribed ? "Unsubscribe" : "Subscribe"}
-      </button>
-      <button onClick={sendTest} disabled={!subscribed}
-        style={{ padding: "8px 16px", background: subscribed ? "#3b82f6" : "#ccc", color: "#fff" }}>
-        Send Test Push
-      </button>
-      {!subscribed && <p style={{ color: "gray", marginTop: 8 }}>Subscribe first, then send test.</p>}
-    </div>
-  );
-}
-// ---- END OF TEST CODE — delete up to here ----
 
 // ── Token validation ───────────────────────────────────────────────────────────
 // Checks both presence AND expiry of the JWT so stale dev-session tokens
@@ -158,6 +131,10 @@ export default function App() {
           element={<ProtectedLayout Page={SafetyTipsPage} />}
         />
         <Route
+          path="/safety-tips/:slug"
+          element={<ProtectedLayout Page={SafetyTipDetailPage} />}
+        />
+        <Route
           path="/resources"
           element={<ProtectedLayout Page={ResourcesPage} />}
         />
@@ -165,10 +142,6 @@ export default function App() {
           path="/manage-users"
           element={<ProtectedLayout Page={ManageUsersPage} />}
         />
-
-        {/* ---- START OF TEST ROUTE — delete this line */}
-        <Route path="/push-test" element={<PushTestPage />} />
-        {/* ---- END OF TEST ROUTE — delete up to here */}
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />

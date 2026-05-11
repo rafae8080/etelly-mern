@@ -42,24 +42,6 @@ router.delete("/unsubscribe", protect, async (req, res) => {
     res.status(500).json({ error: "Failed to remove subscription" });
   }
 });
-
-// ---- START OF TEST CODE — delete from here ----
-router.post("/test", async (_req, res) => {
-  try {
-    await sendPushToAll({
-      title: "🔔 Test Notification",
-      body: "Push notifications are working correctly!",
-      url: "/alerts",
-      tag: "push-test",
-      urgent: false,
-    });
-    res.json({ success: true, message: "Test push sent" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-// ---- END OF TEST CODE — delete up to here ----
-
 // Send a push notification to every stored subscription
 export async function sendPushToAll(payload) {
   initVapid();
@@ -68,10 +50,17 @@ export async function sendPushToAll(payload) {
   await Promise.allSettled(
     subs.map((sub) =>
       webpush
-        .sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(payload))
+        .sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify(payload),
+        )
         .then(() => console.log("[Push] Sent OK →", sub.endpoint.slice(0, 60)))
         .catch(async (err) => {
-          console.error("[Push] Failed →", err.statusCode, err.body ?? err.message);
+          console.error(
+            "[Push] Failed →",
+            err.statusCode,
+            err.body ?? err.message,
+          );
           if (err.statusCode === 410) {
             await PushSubscription.deleteOne({ endpoint: sub.endpoint });
           }

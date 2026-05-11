@@ -1,49 +1,44 @@
 /**
- * Landslide early warning — MGB-aligned 3-factor scoring per susceptibility zone.
+ * Landslide early warning — forecast-window + soil moisture model for Antipolo City.
  *
- *  L1: >= 2 consecutive Intense+ (>=30 mm/hr) hours
- *      OR prior 24h accumulation > zone threshold (risk 3: 20 mm, risk 2: 35 mm)
- *  L2: zone.risk === 3 (steep / unstable slope in MGB data)
- *  L3: soil moisture > 0.35 OR prior 72h rain > 50 mm
+ * Two factors combine to determine severity:
+ *   1. Forecast rainfall intensity (PAGASA thresholds) and WHEN it arrives
+ *   2. Current soil moisture (Open-Meteo model — encodes antecedent rainfall)
  *
- * Alert levels: L1+L2+L3 → EVACUATE | L1+L2 or L1+L3 → WARNING
- *               L2+L3 or L1 only → WATCH | 0-1 factors → no alert
+ * The time window defines lead time; soil moisture defines susceptibility.
+ * A dry slope can handle more rain than a saturated one — hence soil moisture
+ * is required for Watch/Critical/Evacuate but not Warning (heavy rain alone
+ * warrants preparation regardless of prior conditions).
  *
- * L1 uses tiered look-ahead windows matching forecast confidence to severity:
- *   2h → EVACUATE | 4h → WARNING | 6h → WATCH
+ *   EVACUATE : PAGASA Red (≥30 mm/hr) within 1 h AND soil saturated (>35%)
+ *   CRITICAL : PAGASA Red (≥30 mm/hr) within 1–3 h AND soil elevated (>25%)
+ *   WARNING  : PAGASA Orange (≥15 mm/hr) within 3–6 h
+ *   WATCH    : PAGASA Yellow (≥7.5 mm/hr) within 6–12 h AND soil rising (>20%)
  *
- * Cache is warm from runFloodEvacuationCheck which always runs first.
+ * Sources:
+ *   Open-Meteo: Zippenfenig, P. (2023). doi:10.5281/zenodo.7970649
+ *   PAGASA Color-Coded Rainfall Advisory System
+ *   MGB Geohazard Assessment criteria (MGB, DENR, 2014)
  */
 
 import {
   fetchRainfallHourly,
   fetchLandslideData,
+  classifyRainfallIntensity,
   findCurrentHourIndex,
 } from "./openMeteoCache.js";
 import { CITY } from "../config/alertConfig.js";
 import { toDateKey, upsertSystemAlert } from "./alertHelpers.js";
 
-// Mirrors LANDSLIDE_ZONES in hazard.js — keep in sync when zones change.
-// Uses `lng` (not `lon`) to match hazard.js convention.
-const LANDSLIDE_ZONES_ENGINE = [
-  { lat: 14.622, lng: 121.198, risk: 3, name: "Brgy. Dalig (upper slope)" },
-  { lat: 14.565, lng: 121.210, risk: 3, name: "Brgy. Calawis, Antipolo" },
-  { lat: 14.615, lng: 121.187, risk: 3, name: "Brgy. San Jose (hillside)" },
-  { lat: 14.607, lng: 121.182, risk: 3, name: "Brgy. Mambugan (ridge)" },
-  { lat: 14.598, lng: 121.175, risk: 2, name: "Brgy. Inarawan (slope)" },
-  { lat: 14.591, lng: 121.168, risk: 2, name: "Brgy. Dela Paz (hillside)" },
-  { lat: 14.583, lng: 121.172, risk: 3, name: "Hinulugang Taktak escarpment" },
-  { lat: 14.576, lng: 121.162, risk: 2, name: "Brgy. San Roque (mid-slope)" },
-  { lat: 14.568, lng: 121.155, risk: 2, name: "Brgy. Cupang (elevated)" },
-  { lat: 14.574, lng: 121.141, risk: 2, name: "Brgy. San Isidro (steep slope)" },
-];
+const CITY_LOCATION = `${CITY.lat},${CITY.lon}`;
+const SOURCE_CITATION =
+  "Source: Open-Meteo forecast (doi:10.5281/zenodo.7970649); " +
+  "thresholds: PAGASA Color-Coded Rainfall Advisory and MGB geohazard assessment criteria (MGB, 2014).";
 
-function centroid(zones) {
-  if (!zones.length) return { lat: CITY.lat, lon: CITY.lon };
-  const lat = zones.reduce((s, z) => s + z.lat, 0) / zones.length;
-  const lon = zones.reduce((s, z) => s + z.lng, 0) / zones.length;
-  return { lat, lon };
-}
+// PAGASA thresholds (mm/hr)
+const YELLOW = 7.5;
+const ORANGE = 15;
+const RED    = 30;
 
 export async function runLandslideCheck() {
   try {
@@ -56,119 +51,122 @@ export async function runLandslideCheck() {
     const { data: rainfallRaw }  = rainfallResult;
     const { data: landslideRaw } = landslideResult;
 
-    const times  = rainfallRaw.hourly?.time          ?? [];
-    const precip = rainfallRaw.hourly?.precipitation ?? [];
+    const times    = rainfallRaw.hourly?.time          ?? [];
+    const precip   = rainfallRaw.hourly?.precipitation ?? [];
     const startIdx = findCurrentHourIndex(times);
 
-    const maxConsecIntense = (hours) => {
-      let max = 0, run = 0;
-      for (let i = 0; i < hours; i++) {
+    const peakIn = (from, to) => {
+      let peak = 0;
+      for (let i = from; i <= to; i++) {
         const mm = precip[startIdx + i] ?? 0;
-        if (mm >= 30) { run++; if (run > max) max = run; } else run = 0;
+        if (mm > peak) peak = mm;
       }
-      return max;
+      return peak;
     };
-    const li_evacuate = maxConsecIntense(2) >= 2;
-    const li_warning  = maxConsecIntense(4) >= 2;
-    const li_watch    = maxConsecIntense(6) >= 2;
-    const consecutiveIntenseHours = maxConsecIntense(6);
 
-    const todayIdx    = 3;
-    const prior24Rain = landslideRaw.daily?.precipitation_sum?.[todayIdx] ?? 0;
-    const prior72Rain = (landslideRaw.daily?.precipitation_sum ?? [])
-      .slice(Math.max(0, todayIdx - 2), todayIdx + 1)
-      .reduce((a, b) => a + (b ?? 0), 0);
+    const peak_0_1h  = peakIn(0, 0);
+    const peak_1_3h  = peakIn(1, 2);
+    const peak_3_6h  = peakIn(3, 5);
+    const peak_6_12h = peakIn(6, 11);
 
+    // Soil moisture — primary slope instability indicator (MGB 2014)
     const soilTop  = (landslideRaw.hourly?.soil_moisture_0_to_7cm  ?? []).filter(Boolean);
     const soilDeep = (landslideRaw.hourly?.soil_moisture_7_to_28cm ?? []).filter(Boolean);
-    const soilMoisture = ((soilTop.at(-1) ?? 0) + (soilDeep.at(-1) ?? 0)) / 2;
+    const soilMoisture  = ((soilTop.at(-1) ?? 0) + (soilDeep.at(-1) ?? 0)) / 2;
+    const soilPct       = Math.round(soilMoisture * 100);
+    const soilSaturated = soilMoisture > 0.35;
+    const soilElevated  = soilMoisture > 0.25;
+    const soilRising    = soilMoisture > 0.20;
 
-    const l3_saturated = soilMoisture > 0.35 || prior72Rain > 50;
+    const fmt = { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", hour12: true };
+    const timeAt = (offset) => {
+      const t = times[startIdx + offset];
+      return t ? new Date(t).toLocaleTimeString("en-PH", fmt) : null;
+    };
+    const windowLabel = (from, to) => {
+      const t1 = timeAt(from);
+      const t2 = timeAt(to + 1) ?? timeAt(to);
+      if (!t1) return from === 0 ? "within the hour" : `in ${from}–${to + 1} hours`;
+      return t2 ? `between ${t1} and ${t2}` : `around ${t1}`;
+    };
 
-    const evacuateZones = [], warningZones = [], watchZones = [];
+    const soilLine = soilSaturated
+      ? `Soil is fully saturated (${soilPct}%), leaving slopes with near-zero resistance to failure.`
+      : soilElevated
+        ? `Soil moisture is elevated (${soilPct}%), reducing slope stability.`
+        : `Soil moisture is at ${soilPct}%.`;
 
-    for (const zone of LANDSLIDE_ZONES_ENGINE) {
-      const rainfallThreshold = zone.risk === 3 ? 20 : 35;
-      const l1_prior    = prior24Rain >= rainfallThreshold;
-      const l2_slope    = zone.risk === 3;
-      const l1_evacuate = li_evacuate || l1_prior;
-      const l1_warning  = li_warning  || l1_prior;
-      const l1_watch    = li_watch    || l1_prior;
-
-      if (l1_evacuate && l2_slope && l3_saturated) {
-        evacuateZones.push(zone);
-      } else if (l1_warning && (l2_slope || l3_saturated)) {
-        warningZones.push(zone);
-      } else if ((l2_slope && l3_saturated) || l1_watch) {
-        watchZones.push(zone);
-      }
-    }
-
-    const soilPct  = (soilMoisture * 100).toFixed(0);
-    const rainDesc = consecutiveIntenseHours >= 2
-      ? `intense rain falling continuously for ${consecutiveIntenseHours}h (≥30 mm/hr)`
-      : `${prior24Rain.toFixed(0)} mm accumulated in the past 24 hours`;
-    const sourceNote =
-      `Prior 24h: ${prior24Rain.toFixed(0)} mm, 72h: ${prior72Rain.toFixed(0)} mm. ` +
-      `Source: Open-Meteo forecast, MGB susceptibility data.`;
-
-    if (evacuateZones.length > 0) {
-      const { lat, lon } = centroid(evacuateZones);
+    if (peak_0_1h >= RED && soilSaturated) {
+      const cls = classifyRainfallIntensity(peak_0_1h);
       await upsertSystemAlert({
         _dedupeKey: `landslide_evacuate_${toDateKey()}`,
         type: "landslide", severity: "evacuate",
-        title: `Landslide Evacuation Alert — ${evacuateZones.length} Zone(s)`,
+        title: `Landslide Evacuation Alert — Antipolo City`,
         description:
-          `Soil is fully saturated (${soilPct}%) and cannot absorb more water — ` +
-          `${rainDesc} over steep, high-risk slopes. ` +
-          `Immediate evacuation recommended. ` +
-          `${sourceNote} ` +
-          `Affected: ${evacuateZones.map((z) => z.name).join(", ")}.`,
-        barangays: evacuateZones.map((z) => z.name),
-        location: `${lat.toFixed(4)},${lon.toFixed(4)}`,
+          `${cls.label} rainfall (${peak_0_1h.toFixed(1)} mm/hr, PAGASA ${cls.label}) is ` +
+          `imminent. ${soilLine} Intense rain on saturated slopes is the primary trigger ` +
+          `for debris flows and shallow landslides. Immediate evacuation of all residents ` +
+          `near slopes and mountainous areas in eastern Antipolo City ` +
+          `(Calawis, Dalig, San Jose, Mambugan) is required. ${SOURCE_CITATION}`,
+        barangays: [],
+        location: CITY_LOCATION,
+        expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
+      });
+    } else if ((peak_0_1h >= RED || peak_1_3h >= RED) && soilElevated) {
+      const peak = Math.max(peak_0_1h, peak_1_3h);
+      const cls  = classifyRainfallIntensity(peak);
+      const win  = peak_0_1h >= RED ? windowLabel(0, 0) : windowLabel(1, 2);
+      await upsertSystemAlert({
+        _dedupeKey: `landslide_critical_${toDateKey()}`,
+        type: "landslide", severity: "critical",
+        title: `High Landslide Risk — Antipolo City`,
+        description:
+          `${cls.label} rainfall (${peak.toFixed(1)} mm/hr, PAGASA ${cls.label}) is forecast ` +
+          `${win}. ${soilLine} Elevated saturation combined with intense rainfall creates ` +
+          `high probability of slope failure and debris flow. Residents near slopes in ` +
+          `eastern Antipolo should evacuate to safe ground immediately. ${SOURCE_CITATION}`,
+        barangays: [],
+        location: CITY_LOCATION,
+        expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      });
+    } else if (peak_3_6h >= ORANGE) {
+      const cls = classifyRainfallIntensity(peak_3_6h);
+      const win = windowLabel(3, 5);
+      await upsertSystemAlert({
+        _dedupeKey: `landslide_warning_${toDateKey()}`,
+        type: "landslide", severity: "warning",
+        title: `Landslide Warning — Antipolo City`,
+        description:
+          `${cls.label} rainfall (${peak_3_6h.toFixed(1)} mm/hr, PAGASA ${cls.label}) is forecast ` +
+          `${win}. ${soilLine} Prolonged heavy rainfall on the Sierra Madre foothills ` +
+          `increases the risk of shallow landslides and debris flow. Residents near slopes ` +
+          `and ravines should prepare to evacuate and avoid hillside areas. ${SOURCE_CITATION}`,
+        barangays: [],
+        location: CITY_LOCATION,
+        expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      });
+    } else if (peak_6_12h >= YELLOW && soilRising) {
+      const cls = classifyRainfallIntensity(peak_6_12h);
+      const win = windowLabel(6, 11);
+      await upsertSystemAlert({
+        _dedupeKey: `landslide_watch_${toDateKey()}`,
+        type: "landslide", severity: "watch",
+        title: `Landslide Watch — Antipolo City`,
+        description:
+          `${cls.label} rainfall (${peak_6_12h.toFixed(1)} mm/hr, PAGASA ${cls.label}) is forecast ` +
+          `${win}. ${soilLine} Gradual soil saturation on the Sierra Madre foothills may ` +
+          `increase slope vulnerability if rainfall persists or intensifies. Residents near ` +
+          `slopes in eastern Antipolo City should stay informed and monitor updates. ${SOURCE_CITATION}`,
+        barangays: [],
+        location: CITY_LOCATION,
         expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
       });
     }
 
-    if (warningZones.length > 0) {
-      const { lat, lon } = centroid(warningZones);
-      await upsertSystemAlert({
-        _dedupeKey: `landslide_warning_${toDateKey()}`,
-        type: "landslide", severity: "warning",
-        title: `Landslide Warning — ${warningZones.length} Zone(s)`,
-        description:
-          `Landslide risk elevated — ${rainDesc}, soil saturation at ${soilPct}%. ` +
-          `Prepare for possible evacuation near steep slopes. ` +
-          `${sourceNote} ` +
-          `Affected: ${warningZones.map((z) => z.name).join(", ")}.`,
-        barangays: warningZones.map((z) => z.name),
-        location: `${lat.toFixed(4)},${lon.toFixed(4)}`,
-        expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
-      });
-    }
-
-    if (watchZones.length > 0) {
-      const { lat, lon } = centroid(watchZones);
-      await upsertSystemAlert({
-        _dedupeKey: `landslide_watch_${toDateKey()}`,
-        type: "landslide", severity: "watch",
-        title: `Landslide Watch — Monitor Conditions`,
-        description:
-          `Landslide conditions possible — ${prior24Rain.toFixed(0)} mm of recent rain ` +
-          `has raised soil moisture to ${soilPct}%. ` +
-          `Residents near slopes should stay alert and monitor for instability. ` +
-          `${sourceNote}`,
-        barangays: watchZones.map((z) => z.name),
-        location: `${lat.toFixed(4)},${lon.toFixed(4)}`,
-        expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
-      });
-    }
-
     console.log(
-      `[AlertEngine] Landslide — EVACUATE:${evacuateZones.length} ` +
-        `WARNING:${warningZones.length} WATCH:${watchZones.length} ` +
-        `| Intense hours:${consecutiveIntenseHours} Prior24h:${prior24Rain.toFixed(1)}mm ` +
-        `| Soil: ${(soilMoisture * 100).toFixed(0)}%`,
+      `[AlertEngine] Landslide — 0-1h: ${peak_0_1h.toFixed(1)} mm/hr | ` +
+      `1-3h: ${peak_1_3h.toFixed(1)} | 3-6h: ${peak_3_6h.toFixed(1)} | ` +
+      `6-12h: ${peak_6_12h.toFixed(1)} | Soil: ${soilPct}%`,
     );
   } catch (err) {
     console.error("[AlertEngine] Landslide check failed:", err.message);

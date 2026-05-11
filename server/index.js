@@ -12,6 +12,7 @@ import reportRoutes from "./routes/reports.js";
 import evacuationRoutes from "./routes/evacuation.js";
 import communityRoutes from "./routes/community.js";
 import pushRoutes, { sendPushToAll } from "./routes/push.js";
+import inventoryRoutes from "./routes/inventory.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 
 dotenv.config();
@@ -54,6 +55,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/evacuation", evacuationRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/push", pushRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {

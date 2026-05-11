@@ -11,9 +11,6 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.js",
       includeAssets: ["icons/icon.png"],
-      // ---- START OF TEST LINE — delete before deploying to production
-      devOptions: { enabled: true, type: "module" },
-      // ---- END OF TEST LINE — delete up to here
       manifest: {
         name: "E-Telly: Disaster Preparedness & Resource Sharing",
         short_name: "E-Telly",

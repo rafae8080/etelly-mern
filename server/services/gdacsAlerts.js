@@ -1,12 +1,17 @@
 /**
- * GDACS multi-hazard check — Flood (FL) and Volcano (VO) RSS feeds.
+ * GDACS Volcano (VO) check — RSS feed from GDACS (European Commission JRC).
  *
- * Feeds (free, no auth):
- *   FL — https://www.gdacs.org/xml/rss_fl_7d.xml  (past 7 days)
+ * Feed (free, no auth):
  *   VO — https://www.gdacs.org/xml/rss_vo_7d.xml  (past 7 days)
+ *
+ * GDACS FL (flood) feed was removed: it reports events reactively (after occurrence),
+ * not as a forecast. Flood early warning is handled by Open-Meteo rainfall thresholds
+ * in floodAlerts.js. Antipolo City CDRRMO also confirmed no river monitoring stations.
  *
  * Severity: red + dist < 150 km → evacuate | red → critical | orange → warning | green → watch
  * Expiry: 24 hours — full CDRRMO monitoring window for GDACS-reported events.
+ * Source: Global Disaster Alert and Coordination System (GDACS),
+ *   European Commission Joint Research Centre. https://www.gdacs.org
  */
 
 import Alert from "../models/Alert.js";
@@ -14,7 +19,6 @@ import { CITY } from "../config/alertConfig.js";
 import { haversineKm } from "./alertHelpers.js";
 
 const GDACS_FEEDS = {
-  flood:   "https://www.gdacs.org/xml/rss_fl_7d.xml",
   volcano: "https://www.gdacs.org/xml/rss_vo_7d.xml",
 };
 

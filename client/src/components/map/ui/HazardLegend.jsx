@@ -15,11 +15,12 @@ const FLOOD_LEGEND = {
   label: "Flood",
   Icon: Droplets,
   iconColor: "text-blue-500",
-  note: "Phil-LiDAR terrain-based flood susceptibility",
+  note: "Alert markers: PAGASA advisory levels · Tile: Phil-LiDAR WMS",
   rows: [
-    { color: "#dc2626", label: "High susceptibility zone" },
-    { color: "#f97316", label: "Moderate susceptibility zone" },
-    { color: "#3b82f6", label: "Low susceptibility zone" },
+    { color: "#dc2626", label: "Evacuate — Flash flooding imminent" },
+    { color: "#dc2626", label: "Critical — Continuous heavy rainfall" },
+    { color: "#f59e0b", label: "Warning — Heavy rain forecast" },
+    { color: "#3b82f6", label: "Watch — Flood conditions possible" },
   ],
 };
 
@@ -43,12 +44,12 @@ const LANDSLIDE_LEGEND = {
   label: "Landslide",
   Icon: Mountain,
   iconColor: "text-amber-500",
-  note: "MGB susceptibility + Open-Meteo rainfall",
+  note: "Alert markers: PAGASA/MGB thresholds · Tile: Philippine Geoportal WMS",
   rows: [
-    { color: "#dc2626", label: "Critical — high susceptibility" },
-    { color: "#f97316", label: "Warning — elevated risk" },
-    { color: "#f59e0b", label: "Watch — monitor conditions" },
-    { color: "#22c55e", label: "Low — below risk thresholds" },
+    { color: "#dc2626", label: "Evacuate — Imminent slope failure" },
+    { color: "#dc2626", label: "Critical — Intense rainfall ongoing" },
+    { color: "#f97316", label: "Warning — Elevated slope risk" },
+    { color: "#3b82f6", label: "Watch — Conditions possible" },
   ],
 };
 
@@ -73,15 +74,12 @@ const REPORTS_LEGEND = {
   label: "Reports",
   Icon: FileWarning,
   iconColor: "text-red-500",
-  note: "Community emergency reports",
+  note: "Marker border = alert severity level",
   rows: [
-    { color: "#ef4444", label: "Rescue" },
-    { color: "#06b6d4", label: "Flood" },
-    { color: "#dc2626", label: "Fire" },
-    { color: "#f97316", label: "Earthquake" },
-    { color: "#8b5cf6", label: "Landslide" },
-    { color: "#ec4899", label: "Medical" },
-    { color: "#6b7280", label: "Other" },
+    { color: "#dc2626", label: "Evacuate — Immediate action required" },
+    { color: "#dc2626", label: "Critical — Imminent hazard threat" },
+    { color: "#f59e0b", label: "Warning — Elevated risk level" },
+    { color: "#3b82f6", label: "Watch — Monitor conditions" },
   ],
 };
 
@@ -128,7 +126,6 @@ export default function HazardLegend({ activeLayers }) {
 
   const compact = active.length >= 3;
   const selected = active.find((l) => l.key === selectedKey) ?? active[0];
-  const isReports = selected.key === "reports";
 
   return (
     <div
@@ -189,26 +186,20 @@ export default function HazardLegend({ activeLayers }) {
             </p>
           )}
 
-          {/* Rows — 2-column for Reports, single-column for everything else */}
-          <div
-            className={
-              isReports
-                ? "grid grid-cols-2 gap-x-3 gap-y-1.5"
-                : "flex flex-col gap-1.5"
-            }
-          >
-            {selected.rows.map((row) => (
-              <div key={row.label} className="flex items-center gap-1.5">
-                <span
-                  className="w-2.5 h-2.5 rounded-sm shrink-0"
-                  style={{ backgroundColor: row.color }}
-                />
-                <span className="text-[10px] text-gray-600 leading-snug">
-                  {row.label}
-                </span>
-              </div>
-            ))}
-          </div>
+
+            <div className="flex flex-col gap-1">
+              {selected.rows.map((row) => (
+                <div key={row.label} className="flex items-center gap-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: row.color }}
+                  />
+                  <span className="text-[10px] text-gray-600 leading-snug">
+                    {row.label}
+                  </span>
+                </div>
+              ))}
+            </div>
         </div>
       </div>
     </div>

@@ -152,6 +152,11 @@ router.patch("/:id/dismiss", protect, async (req, res) => {
       { new: true },
     );
 
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("alert_updated", { id: req.params.id, isActive: false });
+    }
+
     if (alert?.linkedReportId) {
       await mongoose.connection.db.collection("emergency_reports").updateOne(
         { _id: alert.linkedReportId },
@@ -172,7 +177,6 @@ router.patch("/:id/dismiss", protect, async (req, res) => {
           },
         },
       );
-      const io = req.app.get("io");
       if (io) {
         io.emit("report_updated",        { reportId: alert.linkedReportId.toString(), status: "resolved" });
         io.emit("report_status_updated", { reportId: alert.linkedReportId.toString(), status: "resolved" });
@@ -200,6 +204,11 @@ router.patch("/:id/resolve", protect, async (req, res) => {
       { new: true },
     );
 
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("alert_updated", { id: req.params.id, isActive: false });
+    }
+
     if (alert?.linkedReportId) {
       await mongoose.connection.db.collection("emergency_reports").updateOne(
         { _id: alert.linkedReportId },
@@ -220,7 +229,6 @@ router.patch("/:id/resolve", protect, async (req, res) => {
           },
         },
       );
-      const io = req.app.get("io");
       if (io) {
         io.emit("report_updated",        { reportId: alert.linkedReportId.toString(), status: "resolved" });
         io.emit("report_status_updated", { reportId: alert.linkedReportId.toString(), status: "resolved" });

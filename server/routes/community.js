@@ -1,8 +1,25 @@
 import express from "express";
-import ResourceRequest from "../models/ResourceRequest.js";
+import ResourceRequest  from "../models/ResourceRequest.js";
 import ResourceDonation from "../models/ResourceDonation.js";
-import Alert from "../models/Alert.js";
-import { protect } from "../middleware/auth.js";
+import InventoryItem    from "../models/InventoryItem.js";
+import InventoryLog     from "../models/InventoryLog.js";
+import Alert            from "../models/Alert.js";
+import { protect }      from "../middleware/auth.js";
+import { pushItemAlert } from "../services/inventoryAlerts.js";
+
+const DONATION_CATEGORY_MAP = {
+  food:     "Food & Water",
+  water:    "Food & Water",
+  clothing: "Other",
+  medicine: "Medical",
+  hygiene:  "Medical",
+  shelter:  "Shelter",
+  other:    "Other",
+};
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 const router = express.Router();
 
@@ -78,22 +95,12 @@ router.post("/requests", async (req, res) => {
       });
     }
 
-    // Layer 2 — household flag (same address + barangay + category already active)
-    const householdConflict = await ResourceRequest.findOne({
-      barangay,
-      address,
-      category,
-      status: { $in: ["pending", "approved"] },
-      requesterEmail: { $ne: requesterEmail },
-    });
-
     const request = await ResourceRequest.create({
       requesterName, requesterEmail, barangay, address,
       category, itemDescription,
       quantity: Number(quantity),
       unit: unit || "pcs",
       reason: reason || "",
-      householdFlag: !!householdConflict,
     });
 
     res.status(201).json({ success: true, request });
@@ -245,6 +252,60 @@ router.patch("/donations/:id/receive", protect, async (req, res) => {
     donation.status = "received";
     donation.actionLog.push({ action: "received", by: req.user.name, byId: req.user.id, note: note || "" });
     await donation.save();
+
+    // ── Auto-transfer to inventory ──────────────────────────────────────────
+    try {
+      const donorLabel      = donation.donorName?.trim() || "Anonymous";
+      const inventoryCat    = DONATION_CATEGORY_MAP[donation.category] ?? "Other";
+      const nameRegex       = new RegExp(`^${escapeRegex(donation.itemDescription)}$`, "i");
+
+      const existing = await InventoryItem.findOne({ barangay: donation.barangay, name: nameRegex });
+
+      if (existing) {
+        const prevQty = existing.quantity;
+        existing.quantity  += donation.quantity;
+        existing.donatedBy  = [...(existing.donatedBy ?? []), donorLabel];
+        await existing.save();
+
+        await InventoryLog.create({
+          itemId:        existing._id,
+          itemName:      existing.name,
+          barangay:      existing.barangay,
+          action:        "item_updated",
+          field:         "quantity (donation)",
+          previousValue: prevQty,
+          newValue:      existing.quantity,
+          user: { id: req.user.id, name: req.user.name },
+        });
+
+        pushItemAlert(existing).catch(() => {});
+      } else {
+        const created = await InventoryItem.create({
+          name:        donation.itemDescription,
+          category:    inventoryCat,
+          quantity:    donation.quantity,
+          unit:        donation.unit,
+          minQuantity: 0,
+          barangay:    donation.barangay,
+          expiryDate:  null,
+          donatedBy:   [donorLabel],
+        });
+
+        await InventoryLog.create({
+          itemId:   created._id,
+          itemName: created.name,
+          barangay: created.barangay,
+          action:   "item_created",
+          newValue: donation.quantity,
+          user: { id: req.user.id, name: req.user.name },
+        });
+
+        pushItemAlert(created).catch(() => {});
+      }
+    } catch (invErr) {
+      console.error("[Community] Inventory transfer failed:", invErr.message);
+      // Non-fatal — donation was already marked received
+    }
 
     res.json({ success: true, donation });
   } catch (err) {

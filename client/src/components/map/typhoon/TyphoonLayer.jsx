@@ -136,7 +136,7 @@ function StormMapLayer({ storm }) {
               />
             )}
 
-            {/* Past position dots — small gray */}
+            {/* Past position dots — small gray, clickable */}
             {track
               .filter((p) => p.label === "previous position")
               .map((p, i) => (
@@ -145,7 +145,21 @@ function StormMapLayer({ storm }) {
                   center={[p.lat, p.lon]}
                   radius={4}
                   pathOptions={{ color: "#6b7280", fillColor: "#9ca3af", fillOpacity: 0.8, weight: 1 }}
-                />
+                >
+                  <Popup>
+                    <div className="min-w-[150px]">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">
+                        Previous Position
+                      </p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Position</span>
+                        <span className="font-mono text-gray-600 text-[10px]">
+                          {p.lat.toFixed(1)}°N {p.lon.toFixed(1)}°E
+                        </span>
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
               ))}
 
             {/* Forecast position dots — colored, clickable with popup */}
@@ -251,7 +265,7 @@ function StormMapLayer({ storm }) {
               )}
               {storm.updatedAt && (
                 <p className="text-[9px] text-gray-400 mt-1 border-t border-gray-100 pt-1">
-                  Updated {timeAgo(storm.updatedAt)} · GDACS · PAGASA 2022
+                  GDACS advisory: {timeAgo(storm.updatedAt)} · PAGASA 2022
                 </p>
               )}
             </div>
@@ -593,7 +607,9 @@ export const TyphoonPanel = ({
                   </div>
                 ))}
                 <p className="text-[9px] text-gray-300 mt-0.5">
-                  Updated every 6 hours
+                  {data?.fetchedAt
+                    ? `Last fetched: ${timeAgo(data.fetchedAt)}`
+                    : "Updates every 30 min"}
                 </p>
               </div>
             </div>

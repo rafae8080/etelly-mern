@@ -27,9 +27,7 @@ let   _cooldownUntil = 0;
 export const TTL = {
   RAINFALL_HOURLY: 10 * 60 * 1000,
   FLOOD_FORECAST:  10 * 60 * 1000,
-  FLOOD:            5 * 60 * 1000,
   LANDSLIDE:       10 * 60 * 1000,
-  FLOOD_COMBINED:  10 * 60 * 1000,
   TYPHOON:          5 * 60 * 1000,
 };
 

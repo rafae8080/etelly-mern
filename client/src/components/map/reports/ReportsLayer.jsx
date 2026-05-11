@@ -405,7 +405,7 @@ function createAlertPopup(alert) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function ReportsLayer({ visible, filters = {} }) {
+export default function ReportsLayer({ visible, filters = {}, showAlerts = true }) {
   const map = useMap();
   const [reports, setReports] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -478,19 +478,21 @@ export default function ReportsLayer({ visible, filters = {} }) {
       marker.addTo(markersLayerRef.current);
     });
 
-    // Official alerts (merged from AlertsLayer)
-    alerts.forEach((alert) => {
-      const marker = L.marker([alert.lat, alert.lng], {
-        icon: createAlertIcon(alert.type, alert.severity),
+    // Official alerts — only when the reports layer is explicitly on (hazard layers handle their own)
+    if (showAlerts) {
+      alerts.forEach((alert) => {
+        const marker = L.marker([alert.lat, alert.lng], {
+          icon: createAlertIcon(alert.type, alert.severity),
+        });
+        marker.bindPopup(createAlertPopup(alert), {
+          maxWidth: 300,
+          minWidth: 250,
+        });
+        marker.on("click", (e) => L.DomEvent.stop(e.originalEvent));
+        marker.addTo(markersLayerRef.current);
       });
-      marker.bindPopup(createAlertPopup(alert), {
-        maxWidth: 300,
-        minWidth: 250,
-      });
-      marker.on("click", (e) => L.DomEvent.stop(e.originalEvent));
-      marker.addTo(markersLayerRef.current);
-    });
-  }, [visible, filteredReports, alerts, map]);
+    }
+  }, [visible, filteredReports, alerts, showAlerts, map]);
 
   // Socket + initial fetch
   useEffect(() => {

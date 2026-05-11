@@ -16,8 +16,10 @@ dist-ssr
 .claude/
 CLAUDE.md
 
+SYSTEM_GUIDE.md
 SYSTEM_OVERVIEW.md
 DEPLOYMENT.md
+CRON_EXPLAINED.md
 DOCUMENTATION.md
 
 # Editor directories and files

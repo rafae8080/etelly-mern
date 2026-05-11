@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, AlertTriangle, TriangleAlert } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 import { API_BASE, authHeaders, formatDate, getStatusColor, getStatusDotColor } from "./helpers";
 import LogModal from "./LogModal";
 
@@ -66,15 +66,6 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
         </div>
 
         <div className="p-6 space-y-4">
-          {req.householdFlag && (
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <TriangleAlert size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700">
-                Another person at this address already has an active request for the same category.
-              </p>
-            </div>
-          )}
-
           <div>
             <p className="text-sm font-medium text-gray-700">Requester</p>
             <p className="text-gray-900 text-sm mt-1 font-semibold">{req.requesterName}</p>

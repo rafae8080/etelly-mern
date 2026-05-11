@@ -108,9 +108,7 @@ export default function RequestsView({ requests, loading, onRefresh }) {
                         {req.quantity} {req.unit}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className={req.householdFlag ? "text-amber-600 font-semibold" : ""}>
-                          {req.requesterName}
-                        </div>
+                        <div>{req.requesterName}</div>
                         <div className="text-xs text-gray-400 mt-0.5">{req.barangay}</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-[180px]">

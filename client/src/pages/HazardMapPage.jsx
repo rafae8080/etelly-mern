@@ -3,11 +3,15 @@ import { useMap } from "react-leaflet";
 import {
   Crosshair,
   Map,
-  Droplets,
   MapPin,
   Maximize2,
   Minimize2,
+  FlaskConical,
 } from "lucide-react";
+
+const IS_DEV_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("dev") === "true";
 
 // core
 import BaseMap from "../components/map/core/BaseMap";
@@ -15,9 +19,7 @@ import LayerControlPanel from "../components/map/core/LayerControlPanel";
 import MapStatusBar from "../components/map/core/MapStatusBar";
 
 // flood
-import FloodLayer, {
-  UserLocationMarker,
-} from "../components/map/flood/FloodLayer";
+import { UserLocationMarker } from "../components/map/flood/FloodLayer";
 import FloodHazardLayer from "../components/map/flood/FloodHazardLayer";
 import FloodForecastPanel from "../components/map/flood/FloodForecastPanel";
 import FloodAlertsLayer from "../components/map/flood/FloodAlertsLayer";
@@ -30,9 +32,7 @@ import TyphoonLayer, {
 //landslide
 import LandslideForecastPanel from "../components/map/landslide/LandslideForecastPanel";
 import LandslideAlertsLayer from "../components/map/landslide/LandslideAlertsLayer";
-import LandslideLayer, {
-  LandslideHazardLayer,
-} from "../components/map/landslide/LandslideLayer";
+import { LandslideHazardLayer } from "../components/map/landslide/LandslideLayer";
 
 //earthquake
 import EarthquakeLayer from "../components/map/earthquake/EarthquakeLayer";
@@ -93,7 +93,7 @@ function FlyToTarget({ target }) {
   useEffect(() => {
     if (!target || target === prevTarget.current) return;
     prevTarget.current = target;
-    map.flyTo([target.lat, target.lon], 8, { duration: 1.4 });
+    map.flyTo([target.lat, target.lon], target.zoom ?? 8, { duration: 1.4 });
   }, [target, map]);
 
   return null;
@@ -258,8 +258,20 @@ export default function HazardMapPage() {
         <TyphoonLayer key="typhoon" visible={layers.typhoon} />
         <LandslideHazardLayer key="landslide-haz" visible={layers.landslide} />
         <LandslideAlertsLayer visible={layers.landslide} />
-        <LandslideLayer key="landslide" visible={layers.landslide} />
-        <ReportsLayer visible={layers.reports} filters={reportFilters} />
+        <ReportsLayer
+          visible={layers.reports || layers.flood || layers.landslide}
+          showAlerts={layers.reports}
+          filters={
+            layers.reports
+              ? reportFilters
+              : {
+                  types: [
+                    layers.flood     && "flood",
+                    layers.landslide && "landslide",
+                  ].filter(Boolean),
+                }
+          }
+        />
         <EarthquakeLayer
           visible={layers.earthquake}
           filters={earthquakeFilters}
@@ -345,6 +357,7 @@ export default function HazardMapPage() {
           onToggle={() => togglePopup("forecast")}
           topStyle={btnStyle("forecast")}
           onOfflineChange={handleOfflineChange}
+          onFlyTo={(lat, lon) => setStormFlyTarget({ lat, lon, zoom: 14, t: Date.now() })}
         />
       )}
 
@@ -365,7 +378,7 @@ export default function HazardMapPage() {
           isOpen={activePopup === "landslide"}
           onToggle={() => togglePopup("landslide")}
           topStyle={btnStyle("landslide")}
-          onOfflineChange={handleOfflineChange}
+          onFlyTo={(lat, lon) => setStormFlyTarget({ lat, lon, zoom: 14, t: Date.now() })}
         />
       )}
 
@@ -419,6 +432,12 @@ export default function HazardMapPage() {
             <span className="text-gray-500 text-xs hidden sm:inline">
               — CDRRMO Disaster Monitoring
             </span>
+            {IS_DEV_MODE && (
+              <span className="flex items-center gap-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <FlaskConical size={10} />
+                DEV
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -461,7 +480,15 @@ export default function HazardMapPage() {
       {/* Title bar */}
       <div className="mb-4 flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Hazard Map</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Hazard Map</h1>
+            {IS_DEV_MODE && (
+              <span className="flex items-center gap-1 bg-yellow-100 border border-yellow-300 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <FlaskConical size={11} />
+                DEV MODE
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-0.5">
             {CITY_NAME} — Disaster Preparedness Viewer
           </p>
