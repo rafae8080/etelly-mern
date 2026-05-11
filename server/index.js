@@ -232,6 +232,53 @@ mongoose
   .then(() => {
     console.log("Connected to MongoDB Atlas — etelly");
     startAlertEngine();
+
+    // Watch for new reports from any source (including Flutter direct saves)
+    try {
+      const reportsCol = mongoose.connection.db.collection("emergency_reports");
+      const changeStream = reportsCol.watch([{ $match: { operationType: "insert" } }]);
+
+      changeStream.on("change", (change) => {
+        const doc = change.fullDocument;
+        if (!doc) return;
+
+        io.emit("new_emergency_report", {
+          id: doc._id,
+          emergencyType: doc.emergencyType,
+          severity: doc.severity,
+          location: doc.location,
+          timestamp: doc.timestamp || new Date(),
+          userName: doc.userName,
+          description: doc.description || "",
+          status: doc.status || "pending",
+        });
+
+        const emergencyType = doc.emergencyType || "Emergency";
+        const severity = doc.severity ? ` (${doc.severity})` : "";
+        const locationLabel =
+          doc.location?.barangay ||
+          doc.location?.address ||
+          (typeof doc.location === "string" ? doc.location : "") ||
+          "Unknown location";
+
+        sendPushToAll({
+          title: `New Report: ${emergencyType}${severity}`,
+          body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
+          url: "/reports",
+          tag: `report-${doc._id}`,
+          urgent: true,
+        }).catch((err) => console.error("[Push] Report notification failed:", err));
+      });
+
+      changeStream.on("error", (err) =>
+        console.error("[ChangeStream] emergency_reports error:", err.message)
+      );
+
+      console.log("[ChangeStream] Watching emergency_reports for new inserts");
+    } catch (err) {
+      console.error("[ChangeStream] Failed to start:", err.message);
+    }
+
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })

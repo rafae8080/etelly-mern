@@ -43,9 +43,13 @@ export default function ReportsPage() {
     socket.on("new_emergency_report", () => fetchReports());
     socket.on("report_updated", () => fetchReports());
 
+    // Fallback poll — catches updates if the socket event is missed
+    const poll = setInterval(fetchReports, 30_000);
+
     return () => {
       socket.off("new_emergency_report");
       socket.off("report_updated");
+      clearInterval(poll);
     };
   }, []);
 
