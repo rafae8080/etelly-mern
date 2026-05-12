@@ -14,7 +14,7 @@ import Alert from "../models/Alert.js";
 import { upsertAlert } from "./alertHelpers.js";
 
 const TYPHOON_URL =
-  `${process.env.SERVER_BASE_URL ?? "http://localhost:5000"}/api/hazard/typhoon`;
+  `${process.env.SERVER_BASE_URL ?? `http://localhost:${process.env.PORT || 5000}`}/api/hazard/typhoon`;
 
 export async function runTyphoonCheck() {
   try {

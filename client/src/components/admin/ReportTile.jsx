@@ -30,6 +30,8 @@ export default function ReportTile({
   const [currentStatus, setCurrentStatus] = useState(status);
   const [resolveBy, setResolveBy] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   const stored = localStorage.getItem("user");
   const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
@@ -100,8 +102,10 @@ export default function ReportTile({
     if (!onReject || currentStatus !== "pending") return;
     setIsUpdating(true);
     try {
-      await onReject(id, "rejected", "Rejected by admin");
+      await onReject(id, "rejected", rejectReason.trim() || "Rejected by admin");
       setCurrentStatus("rejected");
+      setShowRejectForm(false);
+      setRejectReason("");
     } catch {}
     setIsUpdating(false);
     setIsModalOpen(false);
@@ -267,21 +271,52 @@ export default function ReportTile({
 
             {/* Footer actions */}
             {currentStatus === "pending" && (
-              <div className="flex gap-3 p-6 border-t border-gray-200">
-                <button
-                  onClick={handleReject}
-                  disabled={isUpdating}
-                  className="flex-1 px-4 py-2 border border-red-500 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors text-sm disabled:opacity-50 cursor-pointer"
-                >
-                  {isUpdating ? "Processing..." : "Reject Report"}
-                </button>
-                <button
-                  onClick={handleApprove}
-                  disabled={isUpdating}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 cursor-pointer"
-                >
-                  {isUpdating ? "Processing..." : "Approve Report"}
-                </button>
+              <div className="p-6 border-t border-gray-200">
+                {showRejectForm ? (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-gray-700">Reason for Rejection</p>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Explain why this report is being rejected…"
+                      rows={3}
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowRejectForm(false); setRejectReason(""); }}
+                        disabled={isUpdating}
+                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={isUpdating}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
+                      >
+                        {isUpdating ? "Processing..." : "Confirm Rejection"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowRejectForm(true); }}
+                      disabled={isUpdating}
+                      className="flex-1 px-4 py-2 border border-red-500 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors text-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      Reject Report
+                    </button>
+                    <button
+                      onClick={handleApprove}
+                      disabled={isUpdating}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {isUpdating ? "Processing..." : "Approve Report"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
