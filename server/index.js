@@ -4,6 +4,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import hazardRoutes from "./routes/hazard.js";
@@ -23,7 +25,6 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
   "http://localhost:3000",
-  /\.vercel\.app$/,
 ];
 
 const corsOptions = {
@@ -38,7 +39,11 @@ const corsOptions = {
   credentials: true,
 };
 
-const io = new Server(server, { cors: corsOptions });
+const io = new Server(server, {
+  pingInterval: 20000,
+  pingTimeout: 10000,
+  cors: corsOptions,
+});
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -96,7 +101,7 @@ app.post("/api/notify-emergency", (req, res) => {
     severity: report.severity,
     location: report.location,
     barangay: report.barangay,
-    city: report.city || "Navotas",
+    city: report.city || "Antipolo City, Rizal",
     timestamp: new Date().toISOString(),
     userName: report.userName,
     phoneNumber: report.phoneNumber,
@@ -122,6 +127,13 @@ app.post("/api/notify-emergency", (req, res) => {
 app.post("/api/reports/update-status", async (req, res) => {
   try {
     const { reportId, status, adminNotes, adminEmail } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(reportId))
+      return res.status(400).json({ success: false, error: "Invalid report ID" });
+
+    const VALID_STATUSES = ["pending", "approved", "rejected", "resolved"];
+    if (!VALID_STATUSES.includes(status))
+      return res.status(400).json({ success: false, error: "Invalid status value" });
 
     const report = status === "approved"
       ? await mongoose.connection.db.collection("emergency_reports").findOne({ _id: new mongoose.Types.ObjectId(reportId) })
@@ -195,6 +207,9 @@ app.post("/api/reports/update-status", async (req, res) => {
 app.post("/api/reports/resolve", async (req, res) => {
   try {
     const { reportId, resolvedBy, resolutionNotes } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(reportId))
+      return res.status(400).json({ success: false, error: "Invalid report ID" });
     const result = await mongoose.connection.db
       .collection("emergency_reports")
       .updateOne(
@@ -228,6 +243,15 @@ app.post("/api/reports/resolve", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+if (process.env.NODE_ENV === "production") {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  app.use(express.static(join(__dirname, "../client/dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(join(__dirname, "../client/dist", "index.html"));
+  });
+}
 
 mongoose
   .connect(process.env.MONGO_URI, { dbName: "etelly" })

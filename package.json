@@ -1,0 +1,11 @@
+{
+  "name": "etelly-heroku",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server/index.js",
+    "heroku-postbuild": "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
