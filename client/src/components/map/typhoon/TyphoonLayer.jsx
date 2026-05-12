@@ -330,11 +330,15 @@ function NoStormContent() {
 
 // ── TyphoonLayer — ONLY map primitives (lives inside MapContainer) ────────
 const TyphoonLayer = ({ visible }) => {
-  const { data } = useOfflineCache("typhoon", fetchTyphoon, 30 * 60 * 1000);
+  const { data, isOffline, cachedAt } = useOfflineCache("typhoon", fetchTyphoon, 30 * 60 * 1000);
 
   if (!visible) return null;
 
-  const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : (data?.storms ?? []);
+  // Only hide when truly offline AND the IndexedDB copy is >24 h old.
+  // When online the server already filters dissipated storms via todate age.
+  const isHideStale = !IS_DEV_MODE && isOffline && cachedAt != null && (Date.now() - cachedAt) > 24 * 60 * 60 * 1000;
+
+  const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : (isHideStale ? [] : (data?.storms ?? []));
 
   return (
     <>
@@ -393,6 +397,11 @@ export const TyphoonPanel = ({
     if (mins < 60) return `${mins}m ago`;
     return `${Math.floor(mins / 60)}h ago`;
   };
+
+  // cacheAgeMs is only meaningful when offline (using IndexedDB fallback).
+  const cacheAgeMs = isOffline && cachedAt != null ? Date.now() - cachedAt : null;
+  const isWarnStale = !IS_DEV_MODE && cacheAgeMs != null && cacheAgeMs > 6 * 60 * 60 * 1000;
+  const isHideStale = !IS_DEV_MODE && cacheAgeMs != null && cacheAgeMs > 24 * 60 * 60 * 1000;
 
   return (
     <>
@@ -484,6 +493,23 @@ export const TyphoonPanel = ({
               <X size={14} />
             </button>
           </div>
+
+          {/* Staleness warning */}
+          {isWarnStale && !loading && (
+            <div
+              className={`mx-3 mt-2 px-3 py-2 rounded-lg border text-[10px] leading-snug flex items-start gap-1.5
+                ${isHideStale
+                  ? "bg-red-50 border-red-200 text-red-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700"}`}
+            >
+              <span className="shrink-0 mt-px">⚠</span>
+              <span>
+                {isHideStale
+                  ? `Storm data is ${Math.floor(cacheAgeMs / 3600000)}h old — may have dissipated. Storm hidden on map.`
+                  : `Storm data is ${Math.floor(cacheAgeMs / 3600000)}h old — may not reflect current conditions.`}
+              </span>
+            </div>
+          )}
 
           {/* Loading */}
           {loading && !IS_DEV_MODE && (

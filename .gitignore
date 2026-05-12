@@ -15,12 +15,13 @@ dist-ssr
 
 .claude/
 CLAUDE.md
-
+CRON_EXPLAINED.md
+DEPLOYMENT.md
+DOCUMENTATION.md
+MOBILE_API.md
 SYSTEM_GUIDE.md
 SYSTEM_OVERVIEW.md
-DEPLOYMENT.md
-CRON_EXPLAINED.md
-DOCUMENTATION.md
+techstack.md
 
 # Editor directories and files
 .vscode/*

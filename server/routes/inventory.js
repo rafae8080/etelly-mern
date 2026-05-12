@@ -8,13 +8,13 @@ const router = express.Router();
 
 // ── Seed data ──────────────────────────────────────────────────────────────────
 const BAGONG_NAYON_SEED = [
-  { name: "Bottled Water (500ml)",    category: "Food & Water",     quantity: 240, unit: "pcs",     minQuantity: 100, expiryDate: new Date("2025-08-01") },
-  { name: "Instant Rice Packs",       category: "Food & Water",     quantity: 12,  unit: "packs",   minQuantity: 50,  expiryDate: new Date("2025-06-30") },
-  { name: "Canned Sardines",          category: "Food & Water",     quantity: 85,  unit: "cans",    minQuantity: 60,  expiryDate: new Date("2026-03-15") },
-  { name: "Emergency Biscuits",       category: "Food & Water",     quantity: 0,   unit: "packs",   minQuantity: 40,  expiryDate: new Date("2025-05-01") },
+  { name: "Bottled Water (500ml)",    category: "Food & Water",     quantity: 240, unit: "pcs",     minQuantity: 100, expiryDate: new Date("2027-08-01") },
+  { name: "Instant Rice Packs",       category: "Food & Water",     quantity: 12,  unit: "packs",   minQuantity: 50,  expiryDate: new Date("2027-06-30") },
+  { name: "Canned Sardines",          category: "Food & Water",     quantity: 85,  unit: "cans",    minQuantity: 60,  expiryDate: new Date("2028-03-15") },
+  { name: "Emergency Biscuits",       category: "Food & Water",     quantity: 0,   unit: "packs",   minQuantity: 40,  expiryDate: new Date("2027-05-01") },
   { name: "First Aid Kits",           category: "Medical",          quantity: 8,   unit: "kits",    minQuantity: 20,  expiryDate: null },
-  { name: "Oral Rehydration Salts",   category: "Medical",          quantity: 30,  unit: "sachets", minQuantity: 50,  expiryDate: new Date("2026-01-20") },
-  { name: "Paracetamol Tablets",      category: "Medical",          quantity: 4,   unit: "boxes",   minQuantity: 10,  expiryDate: new Date("2025-07-10") },
+  { name: "Oral Rehydration Salts",   category: "Medical",          quantity: 30,  unit: "sachets", minQuantity: 50,  expiryDate: new Date("2028-01-20") },
+  { name: "Paracetamol Tablets",      category: "Medical",          quantity: 4,   unit: "boxes",   minQuantity: 10,  expiryDate: new Date("2027-07-10") },
   { name: "Life Vests",               category: "Rescue Equipment", quantity: 0,   unit: "pcs",     minQuantity: 10,  expiryDate: null },
   { name: "Rescue Ropes (20m)",       category: "Rescue Equipment", quantity: 5,   unit: "rolls",   minQuantity: 5,   expiryDate: null },
   { name: "Stretchers",               category: "Rescue Equipment", quantity: 3,   unit: "pcs",     minQuantity: 4,   expiryDate: null },
@@ -27,15 +27,15 @@ const BAGONG_NAYON_SEED = [
 ];
 
 const BEVERLY_HILLS_SEED = [
-  { name: "Bottled Water (1L)",         category: "Food & Water",     quantity: 180, unit: "pcs",     minQuantity: 80,  expiryDate: new Date("2026-12-10") },
-  { name: "Instant Noodles",            category: "Food & Water",     quantity: 45,  unit: "packs",   minQuantity: 60,  expiryDate: new Date("2026-09-01") },
-  { name: "Canned Goods (Tuna)",        category: "Food & Water",     quantity: 90,  unit: "cans",    minQuantity: 60,  expiryDate: new Date("2027-02-28") },
-  { name: "Energy Biscuits",            category: "Food & Water",     quantity: 0,   unit: "packs",   minQuantity: 30,  expiryDate: new Date("2025-11-30") },
-  { name: "Infant Formula",             category: "Food & Water",     quantity: 6,   unit: "cans",    minQuantity: 10,  expiryDate: new Date("2025-12-15") },
+  { name: "Bottled Water (1L)",         category: "Food & Water",     quantity: 180, unit: "pcs",     minQuantity: 80,  expiryDate: new Date("2027-12-10") },
+  { name: "Instant Noodles",            category: "Food & Water",     quantity: 45,  unit: "packs",   minQuantity: 60,  expiryDate: new Date("2027-09-01") },
+  { name: "Canned Goods (Tuna)",        category: "Food & Water",     quantity: 90,  unit: "cans",    minQuantity: 60,  expiryDate: new Date("2028-02-28") },
+  { name: "Energy Biscuits",            category: "Food & Water",     quantity: 0,   unit: "packs",   minQuantity: 30,  expiryDate: new Date("2027-11-30") },
+  { name: "Infant Formula",             category: "Food & Water",     quantity: 6,   unit: "cans",    minQuantity: 10,  expiryDate: new Date("2027-12-15") },
   { name: "First Aid Kits",             category: "Medical",          quantity: 10,  unit: "kits",    minQuantity: 15,  expiryDate: null },
-  { name: "Paracetamol Tablets",        category: "Medical",          quantity: 18,  unit: "boxes",   minQuantity: 10,  expiryDate: new Date("2026-06-05") },
-  { name: "Antiseptic Solution",        category: "Medical",          quantity: 4,   unit: "bottles", minQuantity: 6,   expiryDate: new Date("2026-03-01") },
-  { name: "Oral Rehydration Salts",     category: "Medical",          quantity: 0,   unit: "sachets", minQuantity: 30,  expiryDate: new Date("2025-10-20") },
+  { name: "Paracetamol Tablets",        category: "Medical",          quantity: 18,  unit: "boxes",   minQuantity: 10,  expiryDate: new Date("2027-06-05") },
+  { name: "Antiseptic Solution",        category: "Medical",          quantity: 4,   unit: "bottles", minQuantity: 6,   expiryDate: new Date("2027-03-01") },
+  { name: "Oral Rehydration Salts",     category: "Medical",          quantity: 0,   unit: "sachets", minQuantity: 30,  expiryDate: new Date("2027-10-20") },
   { name: "Life Vests",                 category: "Rescue Equipment", quantity: 14,  unit: "pcs",     minQuantity: 10,  expiryDate: null },
   { name: "Rescue Ropes (20m)",         category: "Rescue Equipment", quantity: 3,   unit: "rolls",   minQuantity: 5,   expiryDate: null },
   { name: "Emergency Stretchers",       category: "Rescue Equipment", quantity: 2,   unit: "pcs",     minQuantity: 3,   expiryDate: null },

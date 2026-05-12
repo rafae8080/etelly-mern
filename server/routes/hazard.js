@@ -170,6 +170,16 @@ router.get("/typhoon", async (req, res) => {
           if (m) windKph = Math.round(parseFloat(m[1]));
         }
 
+        const updatedAt = xmlText(item, "gdacs:todate") ?? null;
+
+        // rss_tc_7d.xml retains storms for 7 days after dissipation.
+        // GDACS updates active storms every ~6 min — a todate older than
+        // 12 h means the storm has ended or left PAR.
+        if (updatedAt) {
+          const ageMs = Date.now() - new Date(updatedAt).getTime();
+          if (ageMs > 12 * 60 * 60 * 1000) return null;
+        }
+
         return {
           id:              xmlText(item, "gdacs:eventid")   ?? "unknown",
           episodeid:       xmlText(item, "gdacs:episodeid") ?? null,
@@ -179,7 +189,7 @@ router.get("/typhoon", async (req, res) => {
           windKph:         Math.round(windKph),
           windKnots:       Math.round(windKph / 1.852),
           category:        classifyTyphoon(windKph),
-          updatedAt:       xmlText(item, "gdacs:todate") ?? null,
+          updatedAt,
           windRadiusKm:    estimateWindRadius(windKph),
           windRadiusSource:"estimated",
           movement:        null,
@@ -202,6 +212,8 @@ router.get("/typhoon", async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("❌ Typhoon API error:", err.message);
+    const stale = getCachedStale(CACHE_KEY);
+    if (stale) return res.json({ ...stale, stale: true });
     res.json({ storms: [], hasActiveStorm: false, fetchedAt: new Date().toISOString(), error: err.message });
   }
 });

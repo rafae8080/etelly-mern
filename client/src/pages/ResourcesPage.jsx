@@ -295,7 +295,9 @@ function ItemModal({ item, onClose, onSave, onDelete }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function ResourcesPage() {
-  const [barangay,    setBarangay]   = useState("muntindilaw");
+  const [barangay,    setBarangay]   = useState(
+    () => localStorage.getItem("resources_barangay") ?? "muntindilaw"
+  );
   const [items,       setItems]      = useState([]);
   const [logs,        setLogs]       = useState([]);
   const [loading,     setLoading]    = useState(true);
@@ -507,7 +509,7 @@ export default function ResourcesPage() {
                     {BARANGAYS.map((b) => (
                       <button
                         key={b.value}
-                        onClick={() => { setBarangay(b.value); setBrgyOpen(false); setSearch(""); setActiveCat("All"); setAlertFilter(null); setPage(1); }}
+                        onClick={() => { localStorage.setItem("resources_barangay", b.value); setBarangay(b.value); setBrgyOpen(false); setSearch(""); setActiveCat("All"); setAlertFilter(null); setPage(1); }}
                         className={`w-full text-left px-4 py-2.5 text-sm transition-colors
                           ${barangay === b.value
                             ? "bg-red-50 text-red-700 font-semibold"
