@@ -378,6 +378,7 @@ export default function HazardMapPage() {
           isOpen={activePopup === "landslide"}
           onToggle={() => togglePopup("landslide")}
           topStyle={btnStyle("landslide")}
+          onOfflineChange={handleOfflineChange}
           onFlyTo={(lat, lon) => setStormFlyTarget({ lat, lon, zoom: 14, t: Date.now() })}
         />
       )}
@@ -390,6 +391,7 @@ export default function HazardMapPage() {
           topStyle={btnStyle("earthquake")}
           onFilterChange={setEarthquakeFilters}
           onRefresh={() => setEarthquakeRefresh((prev) => prev + 1)}
+          onOfflineChange={handleOfflineChange}
         />
       )}
 

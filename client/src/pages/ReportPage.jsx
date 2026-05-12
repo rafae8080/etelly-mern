@@ -1,5 +1,5 @@
 import ReportTile from "../components/admin/ReportTile";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { connectSocket } from "../utils/socket";
 import { TrendingUp, Search } from "lucide-react";
 
@@ -30,6 +30,7 @@ export default function ReportsPage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+  const hasLoaded = useRef(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -55,7 +56,7 @@ export default function ReportsPage() {
 
   const fetchReports = async () => {
     try {
-      setLoading(true);
+      if (!hasLoaded.current) setLoading(true);
       setError(null);
 
       const response = await fetch(`${API_BASE}/api/reports`);
@@ -96,6 +97,7 @@ export default function ReportsPage() {
     } catch (err) {
       setError(err.message);
     } finally {
+      hasLoaded.current = true;
       setLoading(false);
     }
   };

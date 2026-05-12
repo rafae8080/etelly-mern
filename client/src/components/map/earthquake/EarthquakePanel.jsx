@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Activity, RefreshCw, WifiOff, X } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
@@ -51,6 +51,7 @@ export default function EarthquakePanel({
   onToggle,
   onFilterChange,
   onRefresh,
+  onOfflineChange,
   topStyle,
 }) {
   const [filters, setFilters] = useState({
@@ -64,6 +65,12 @@ export default function EarthquakePanel({
     fetchEarthquakeDefault,
     5 * 60 * 1000,
   );
+
+  useEffect(() => {
+    if (typeof onOfflineChange === "function") {
+      onOfflineChange({ isOffline, cachedAt });
+    }
+  }, [isOffline, cachedAt, onOfflineChange]);
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };

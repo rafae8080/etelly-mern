@@ -1,8 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Mountain, MapPin, TriangleAlert, Siren, X } from "lucide-react";
 import { connectSocket } from "../../../utils/socket";
+import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+
+const fetchLandslideAlerts = () =>
+  fetch(`${API_BASE}/api/alerts`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(({ alerts = [] }) =>
+      alerts
+        .filter((a) => a.type === "landslide" && a.isActive)
+        .sort(
+          (a, b) =>
+            (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
+        ),
+    );
 
 const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
 
@@ -137,47 +153,33 @@ const AlertCard = ({ alert, onFlyTo }) => {
 };
 
 // ── Hooks always called unconditionally (Rules of Hooks) ─────────────────────
-const LandslideForecastPanelContent = ({ isOpen, onToggle, topStyle, onFlyTo }) => {
-  const [allAlerts, setAllAlerts]         = useState([]);
-  const [alertsLoading, setAlertsLoading] = useState(false);
-  const [refreshKey, setRefreshKey]       = useState(0);
+const LandslideForecastPanelContent = ({ isOpen, onToggle, topStyle, onFlyTo, onOfflineChange }) => {
+  const {
+    data,
+    loading: alertsLoading,
+    isOffline,
+    cachedAt,
+    refresh,
+  } = useOfflineCache("landslide-alerts", fetchLandslideAlerts, 2 * 60 * 1000);
+
+  const allAlerts = data ?? [];
 
   useEffect(() => {
     const socket = connectSocket();
-    const bump = () => setRefreshKey((n) => n + 1);
+    const bump = () => refresh({ background: true });
     socket.on("alert_updated", bump);
     socket.on("new_alert",     bump);
     return () => {
       socket.off("alert_updated", bump);
       socket.off("new_alert",     bump);
     };
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-
-    const load = async () => {
-      setAlertsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/alerts`);
-        if (!res.ok) throw new Error("fetch failed");
-        const { alerts = [] } = await res.json();
-        const ls = alerts
-          .filter((a) => a.type === "landslide" && a.isActive)
-          .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99));
-        if (!cancelled) setAllAlerts(ls);
-      } catch (_) {
-        // silent — show last loaded list
-      } finally {
-        if (!cancelled) setAlertsLoading(false);
-      }
-    };
-
-    load();
-    const interval = setInterval(load, 2 * 60 * 1000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [isOpen, refreshKey]);
+    if (typeof onOfflineChange === "function") {
+      onOfflineChange({ isOffline, cachedAt });
+    }
+  }, [isOffline, cachedAt, onOfflineChange]);
 
   const overallSev = getOverallSeverity(allAlerts);
   const h          = HEADER_STYLE[overallSev] ?? HEADER_STYLE.normal;
