@@ -28,13 +28,14 @@ export default function ReportTile({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
-  const [resolveBy, setResolveBy] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
   const stored = localStorage.getItem("user");
-  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+  const parsedUser = stored ? JSON.parse(stored) : null;
+  const isAdmin = parsedUser?.role === "admin";
+  const currentUserName = parsedUser?.name || parsedUser?.email || "admin";
 
   const getLocationString = () => {
     if (typeof location === "string") return location;
@@ -115,7 +116,7 @@ export default function ReportTile({
     e.stopPropagation();
     setIsUpdating(true);
     try {
-      const ok = await onResolve?.(id, resolveBy.trim(), resolveNotes.trim());
+      const ok = await onResolve?.(id, currentUserName, resolveNotes.trim());
       if (ok) {
         setCurrentStatus("resolved");
         setIsModalOpen(false);
@@ -324,17 +325,7 @@ export default function ReportTile({
               <div className="p-6 border-t border-gray-200 space-y-3">
                 <p className="text-sm font-semibold text-gray-700">Mark as Resolved</p>
                 <div>
-                  <label className="text-xs text-gray-600 mb-1 block">Responded by</label>
-                  <input
-                    type="text"
-                    value={resolveBy}
-                    onChange={(e) => setResolveBy(e.target.value)}
-                    placeholder="Name or team who responded"
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 mb-1 block">Resolution notes</label>
+                  <label className="text-xs text-gray-600 mb-1 block">Actions taken</label>
                   <textarea
                     value={resolveNotes}
                     onChange={(e) => setResolveNotes(e.target.value)}
