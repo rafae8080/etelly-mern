@@ -15,6 +15,7 @@ dist-ssr
 
 .claude/
 CLAUDE.md
+HEROKU_GUIDE.md
 CRON_EXPLAINED.md
 DEPLOYMENT.md
 DOCUMENTATION.md
