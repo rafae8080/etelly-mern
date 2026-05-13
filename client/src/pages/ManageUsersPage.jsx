@@ -536,12 +536,14 @@ export default function ManageUsersPage() {
             className="fixed z-50 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1"
             style={{ top: menuState.top, right: menuState.right }}
           >
-            <button
-              onClick={() => handleOpenEditModal(menuUser)}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-            >
-              <Pencil size={14} /> Edit
-            </button>
+            {!isResidentMenu && (
+              <button
+                onClick={() => handleOpenEditModal(menuUser)}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+              >
+                <Pencil size={14} /> Edit
+              </button>
+            )}
             {!isResidentMenu && (
               <button
                 onClick={() => handleResetPassword(menuUser)}

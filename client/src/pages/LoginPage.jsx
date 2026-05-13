@@ -31,6 +31,9 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.message || "Incorrect username or password");
         setIsLoading(false);
+      } else if (data.user.role === "user") {
+        setError("Access denied. This portal is for CDRRMO staff and Barangay Officials only. Please use the E-Telly mobile app.");
+        setIsLoading(false);
       } else {
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
