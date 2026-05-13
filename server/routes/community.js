@@ -4,6 +4,7 @@ import ResourceDonation from "../models/ResourceDonation.js";
 import InventoryItem    from "../models/InventoryItem.js";
 import InventoryLog     from "../models/InventoryLog.js";
 import Alert            from "../models/Alert.js";
+import User             from "../models/user.js";
 import { protect }      from "../middleware/auth.js";
 import { pushItemAlert } from "../services/inventoryAlerts.js";
 
@@ -65,6 +66,30 @@ router.get("/requests", protect, async (req, res) => {
     withPriority.sort((a, b) => b.score - a.score || 0);
 
     res.json({ success: true, requests: withPriority });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/community/requests/mine — mobile: returns the logged-in user's own requests
+router.get("/requests/mine", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("email").lean();
+    if (!user) return res.status(404).json({ success: false, error: "User not found." });
+    const requests = await ResourceRequest.find({ requesterEmail: user.email }).sort({ createdAt: -1 }).lean();
+    res.json({ success: true, requests });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/community/donations/mine — mobile: returns the logged-in user's own donations
+router.get("/donations/mine", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("email").lean();
+    if (!user) return res.status(404).json({ success: false, error: "User not found." });
+    const donations = await ResourceDonation.find({ donorEmail: user.email }).sort({ createdAt: -1 }).lean();
+    res.json({ success: true, donations });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

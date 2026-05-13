@@ -1,44 +1,71 @@
-import { useState, useEffect } from "react";
-import { X, Pencil, Trash2, UserCog, Copy, KeyRound } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Pencil, Trash2, UserCog, Copy, KeyRound, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
 
-const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+const API_BASE  = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+const PAGE_SIZE = 7;
+
+const ROLE_OPTIONS = [
+  { key: "admin",             label: "Admin"    },
+  { key: "barangay_official", label: "Barangay" },
+  { key: "user",              label: "Resident" },
+];
+
+function getRoleLabel(role) {
+  if (role === "admin")             return "Admin";
+  if (role === "barangay_official") return "Barangay";
+  return "Resident";
+}
+
+function getRoleBadge(role) {
+  if (role === "admin")             return "bg-red-100 text-red-700";
+  if (role === "barangay_official") return "bg-blue-100 text-blue-700";
+  return "bg-green-100 text-green-700";
+}
 
 export default function ManageUsersPage() {
-  const [users, setUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [openActionMenu, setOpenActionMenu] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [alert, setAlert] = useState("");
-  const [alertType, setAlertType] = useState("success");
+  const [users,           setUsers]           = useState([]);
+  const [searchQuery,     setSearchQuery]     = useState("");
+  const [selectedRoles,   setSelectedRoles]   = useState([]);
+  const [page,            setPage]            = useState(1);
+  const [isModalOpen,     setIsModalOpen]     = useState(false);
+  const [isEditMode,      setIsEditMode]      = useState(false);
+  const [selectedUser,    setSelectedUser]    = useState(null);
+  const [menuState,       setMenuState]       = useState(null);
+  const [isLoading,       setIsLoading]       = useState(false);
+  const [alert,           setAlert]           = useState("");
+  const [alertType,       setAlertType]       = useState("success");
   const [generatedPassword, setGeneratedPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword,    setShowPassword]    = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
-  const [resetResult, setResetResult] = useState(null); // { name, tempPassword }
+  const [userToDelete,    setUserToDelete]    = useState(null);
+  const [resetResult,     setResetResult]     = useState(null);
+  const [filterOpen,      setFilterOpen]      = useState(false);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  const filterRef = useRef(null);
 
   const [formData, setFormData] = useState({
-    email: "",
-    firstName: "",
-    lastName: "",
-    role: "barangay_official",
-    password: "",
+    email: "", firstName: "", lastName: "", role: "barangay_official", password: "",
   });
 
-  // ===== AUTO EMAIL GENERATION =====
-  // Builds "LastnameF@etelly.com" from the name fields.
-  // Compound surnames (e.g. "dela Cruz") have spaces removed: delaCruzJ@etelly.com
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) {
+        setFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ── Auto email ──────────────────────────────────────────────────────────────
   const buildEmail = (firstName, lastName) => {
     const first = firstName.trim();
-    const last = lastName.trim();
+    const last  = lastName.trim();
     if (!first && !last) return "";
-    const cleanLast = last.replace(/\s+/g, "");
-    const lastFormatted =
-      cleanLast.charAt(0).toUpperCase() + cleanLast.slice(1);
-    const firstInitial = first.charAt(0).toUpperCase();
-    return `${lastFormatted}${firstInitial}@etelly.com`;
+    const cleanLast     = last.replace(/\s+/g, "");
+    const lastFormatted = cleanLast.charAt(0).toUpperCase() + cleanLast.slice(1);
+    return `${lastFormatted}${first.charAt(0).toUpperCase()}@etelly.com`;
   };
 
   const handleNameChange = (field, value) => {
@@ -47,87 +74,110 @@ export default function ManageUsersPage() {
       if (!isEditMode) {
         next.email = buildEmail(
           field === "firstName" ? value : prev.firstName,
-          field === "lastName" ? value : prev.lastName,
+          field === "lastName"  ? value : prev.lastName,
         );
       }
       return next;
     });
   };
 
-  // ===== FETCH USERS =====
+  // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/api/users`, {
+      const res   = await fetch(`${API_BASE}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       setUsers(data);
-    } catch (err) {
+    } catch {
       showAlert("Failed to fetch users", "error");
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  // ===== HELPERS =====
+  // ── Helpers ─────────────────────────────────────────────────────────────────
   const showAlert = (message, type = "success") => {
     setAlert(message);
     setAlertType(type);
     setTimeout(() => setAlert(""), 3000);
   };
 
-  const getFirstName = (fullName) => fullName?.split(" ")[0] || "";
-  const getLastName = (fullName) =>
-    fullName?.split(" ").slice(1).join(" ") || "";
+  const getFirstName = (n) => n?.split(" ")[0] || "";
+  const getLastName  = (n) => n?.split(" ").slice(1).join(" ") || "";
 
+  const toggleRole = (role) => {
+    setSelectedRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+    setPage(1);
+  };
+
+  // ── Filter + paginate ───────────────────────────────────────────────────────
+  const filtered = users.filter(u => {
+    const q           = searchQuery.toLowerCase();
+    const matchSearch = u.email.toLowerCase().includes(q) ||
+                        u.name?.toLowerCase().includes(q) ||
+                        getRoleLabel(u.role).toLowerCase().includes(q);
+    const matchRole   = selectedRoles.length === 0 || selectedRoles.includes(u.role);
+    return matchSearch && matchRole;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // ── Fixed-position action menu ──────────────────────────────────────────────
+  const handleMenuToggle = (e, userId) => {
+    if (menuState?.userId === userId) { setMenuState(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuState({ userId, top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  };
+
+  const menuUser       = menuState ? users.find(u => u._id === menuState.userId) : null;
+  const isResidentMenu = menuUser?.role === "user";
+
+  // ── Password ────────────────────────────────────────────────────────────────
   const generatePassword = () => {
-    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-    const lower = "abcdefghjkmnpqrstuvwxyz";
-    const digits = "23456789";
+    const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower   = "abcdefghjkmnpqrstuvwxyz";
+    const digits  = "23456789";
     const special = "!@#$%^&*";
-    const all = upper + lower + digits + special;
-
-    const chars = [
-      upper[Math.floor(Math.random() * upper.length)],
-      upper[Math.floor(Math.random() * upper.length)],
-      lower[Math.floor(Math.random() * lower.length)],
-      lower[Math.floor(Math.random() * lower.length)],
-      digits[Math.floor(Math.random() * digits.length)],
-      digits[Math.floor(Math.random() * digits.length)],
+    const all     = upper + lower + digits + special;
+    const chars   = [
+      upper  [Math.floor(Math.random() * upper.length)],
+      upper  [Math.floor(Math.random() * upper.length)],
+      lower  [Math.floor(Math.random() * lower.length)],
+      lower  [Math.floor(Math.random() * lower.length)],
+      digits [Math.floor(Math.random() * digits.length)],
+      digits [Math.floor(Math.random() * digits.length)],
       special[Math.floor(Math.random() * special.length)],
       special[Math.floor(Math.random() * special.length)],
     ];
     while (chars.length < 16) chars.push(all[Math.floor(Math.random() * all.length)]);
-    const password = chars.sort(() => Math.random() - 0.5).join("");
-
-    setGeneratedPassword(password);
-    setFormData((prev) => ({ ...prev, password }));
+    const pw = chars.sort(() => Math.random() - 0.5).join("");
+    setGeneratedPassword(pw);
+    setFormData(prev => ({ ...prev, password: pw }));
     setShowPassword(true);
   };
 
+  const copyPassword = async () => {
+    const pw = generatedPassword || formData.password;
+    if (!pw) return showAlert("No password to copy!", "error");
+    await navigator.clipboard.writeText(pw);
+    showAlert("Password copied to clipboard!");
+  };
+
   const handleResetPassword = async (user) => {
-    setOpenActionMenu(null);
+    setMenuState(null);
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE}/api/users/${user._id}/reset-password`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const res   = await fetch(`${API_BASE}/api/users/${user._id}/reset-password`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       setResetResult({ name: user.name, tempPassword: data.tempPassword });
@@ -138,26 +188,13 @@ export default function ManageUsersPage() {
     }
   };
 
-  const copyPassword = async () => {
-    const passwordToCopy = generatedPassword || formData.password;
-    if (!passwordToCopy) return showAlert("No password to copy!", "error");
-    await navigator.clipboard.writeText(passwordToCopy);
-    showAlert("Password copied to clipboard!");
-  };
-
-  // ===== MODAL HANDLERS =====
+  // ── Modal handlers ──────────────────────────────────────────────────────────
   const handleOpenCreateModal = () => {
     setIsEditMode(false);
     setSelectedUser(null);
     setGeneratedPassword("");
     setShowPassword(false);
-    setFormData({
-      email: "",
-      firstName: "",
-      lastName: "",
-      role: "barangay_official",
-      password: "",
-    });
+    setFormData({ email: "", firstName: "", lastName: "", role: "barangay_official", password: "" });
     setIsModalOpen(true);
   };
 
@@ -167,29 +204,23 @@ export default function ManageUsersPage() {
     setGeneratedPassword("");
     setShowPassword(false);
     setFormData({
-      email: user.email,
-      firstName: getFirstName(user.name),
-      lastName: getLastName(user.name),
-      role: user.role,
-      password: "",
+      email: user.email, firstName: getFirstName(user.name),
+      lastName: getLastName(user.name), role: user.role, password: "",
     });
     setIsModalOpen(true);
-    setOpenActionMenu(null);
+    setMenuState(null);
   };
 
-  // ===== CREATE USER =====
+  // ── CRUD ────────────────────────────────────────────────────────────────────
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/api/users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
+      const res   = await fetch(`${API_BASE}/api/users`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(formData),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
@@ -203,24 +234,17 @@ export default function ManageUsersPage() {
     }
   };
 
-  // ===== UPDATE USER =====
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     if (!selectedUser) return;
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE}/api/users/${selectedUser._id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(formData),
-        },
-      );
+      const res   = await fetch(`${API_BASE}/api/users/${selectedUser._id}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(formData),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       showAlert("User updated successfully!");
@@ -233,11 +257,10 @@ export default function ManageUsersPage() {
     }
   };
 
-  // ===== DELETE USER =====
   const openDeleteConfirmation = (userId) => {
     setUserToDelete(userId);
     setShowDeleteConfirm(true);
-    setOpenActionMenu(null);
+    setMenuState(null);
   };
 
   const confirmDeleteUser = async () => {
@@ -246,13 +269,9 @@ export default function ManageUsersPage() {
     setShowDeleteConfirm(false);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE}/api/users/${userToDelete}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const res   = await fetch(`${API_BASE}/api/users/${userToDelete}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       showAlert("User deleted successfully!");
@@ -265,213 +284,337 @@ export default function ManageUsersPage() {
     }
   };
 
-  // ===== RENDER =====
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div>
-      {/* Alert */}
+
+      {/* Toast */}
       {alert && (
-        <div
-          className={`fixed top-4 right-4 z-50 bg-white px-6 py-3 rounded-lg shadow-lg border-l-4 ${alertType === "error" ? "border-red-600" : "border-green-600"} max-w-md`}
-        >
+        <div className={`fixed top-4 right-4 z-50 bg-white px-6 py-3 rounded-lg shadow-lg border-l-4 max-w-md
+          ${alertType === "error" ? "border-red-600" : "border-green-600"}`}>
           <p className="text-gray-900 font-medium">{alert}</p>
-          <button
-            onClick={() => setAlert("")}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={() => setAlert("")} className="absolute top-2 right-2 text-gray-400 hover:text-gray-600">
             <X size={18} />
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Manage Users</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manage Users</h1>
         <button
           onClick={handleOpenCreateModal}
-          className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+          className="px-4 sm:px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm sm:text-base"
         >
           + Create User
         </button>
       </div>
 
       {/* Search */}
-      <div className="mb-6">
+      <div className="mb-4">
         <input
           type="text"
           placeholder="Search by name, email or role..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
         />
       </div>
 
-      {/* Table */}
-      <div
-        className="bg-white rounded-lg shadow overflow-hidden"
-        style={{ minHeight: "320px" }}
-      >
-        <table className="min-w-full divide-y divide-gray-200">
+      {/* Mobile filter */}
+      <div className="md:hidden mb-4">
+        <button
+          onClick={() => setMobileFilterOpen(o => !o)}
+          className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors
+            ${selectedRoles.length > 0
+              ? "border-red-500 text-red-600 bg-red-50"
+              : "border-gray-300 text-gray-600 bg-white hover:bg-gray-50"}`}
+        >
+          <ListFilter size={14} />
+          Filter by Role
+          {selectedRoles.length > 0 && (
+            <span className="text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 leading-none">
+              {selectedRoles.length}
+            </span>
+          )}
+        </button>
+        {mobileFilterOpen && (
+          <div className="mt-2 flex flex-wrap gap-2 items-center">
+            {ROLE_OPTIONS.map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => toggleRole(opt.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                  ${selectedRoles.includes(opt.key)
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            {selectedRoles.length > 0 && (
+              <button
+                onClick={() => { setSelectedRoles([]); setPage(1); }}
+                className="text-xs text-red-500 hover:text-red-700 px-1 py-1.5 underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop table ── */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-100 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {["Email", "First Name", "Last Name", "Role", "Action"].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="relative flex items-center gap-1.5" ref={filterRef}>
+                  Role
+                  <button
+                    onClick={() => setFilterOpen(o => !o)}
+                    className={`flex items-center gap-0.5 p-0.5 rounded hover:bg-gray-200 transition-colors
+                      ${selectedRoles.length > 0 ? "text-red-600" : "text-gray-400"}`}
+                    title="Filter by role"
                   >
-                    {h}
-                  </th>
-                ),
-              )}
+                    <ListFilter size={13} />
+                    {selectedRoles.length > 0 && (
+                      <span className="text-[10px] bg-red-600 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold leading-none">
+                        {selectedRoles.length}
+                      </span>
+                    )}
+                  </button>
+                  {filterOpen && (
+                    <div className="absolute top-full left-0 mt-1.5 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1.5 z-50">
+                      {ROLE_OPTIONS.map(opt => (
+                        <label
+                          key={opt.key}
+                          className="flex items-center gap-2.5 px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedRoles.includes(opt.key)}
+                            onChange={() => toggleRole(opt.key)}
+                            className="accent-red-600 cursor-pointer"
+                          />
+                          <span className="text-sm text-gray-700 font-normal normal-case tracking-normal">
+                            {opt.label}
+                          </span>
+                        </label>
+                      ))}
+                      {selectedRoles.length > 0 && (
+                        <div className="border-t border-gray-100 mt-1 pt-1 px-4">
+                          <button
+                            onClick={() => { setSelectedRoles([]); setPage(1); setFilterOpen(false); }}
+                            className="text-xs text-red-500 hover:text-red-700 py-1"
+                          >
+                            Clear filter
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUsers.map((user) => (
-              <tr key={user._id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm font-mono text-gray-900">
-                  {user.email}
+          <tbody className="bg-white divide-y divide-gray-50">
+            {paginated.map(user => (
+              <tr key={user._id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{user.name}</td>
+                <td className="px-6 py-4 font-mono text-gray-500">{user.email}</td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getRoleBadge(user.role)}`}>
+                    {getRoleLabel(user.role)}
+                  </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {getFirstName(user.name)}
+                <td className="px-6 py-4">
+                  <button
+                    onClick={(e) => handleMenuToggle(e, user._id)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <UserCog size={18} className="text-gray-500" />
+                  </button>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {getLastName(user.name)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {user.role === "admin" ? "Admin" : "Barangay"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        setOpenActionMenu(
-                          openActionMenu === user._id ? null : user._id,
-                        )
-                      }
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <UserCog size={18} />
-                    </button>
-                    {openActionMenu === user._id && (
-                      <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                        <button
-                          onClick={() => handleOpenEditModal(user)}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <Pencil size={14} /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleResetPassword(user)}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-amber-600 flex items-center gap-2"
-                        >
-                          <KeyRound size={14} /> Reset Password
-                        </button>
-                        <button
-                          onClick={() => openDeleteConfirmation(user._id)}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-red-600 flex items-center gap-2"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </td>
+              </tr>
+            ))}
+            {Array.from({ length: PAGE_SIZE - paginated.length }).map((_, i) => (
+              <tr key={`empty-${i}`}>
+                <td className="px-6 py-4">&nbsp;</td>
+                <td /><td /><td />
               </tr>
             ))}
           </tbody>
         </table>
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-12 text-gray-500">No users found</div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+          <span className="text-xs text-gray-400">
+            {filtered.length === 0 ? "No users found" : `${filtered.length} user${filtered.length !== 1 ? "s" : ""}`}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs font-semibold text-gray-500">{safePage} / {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Mobile cards ── */}
+      <div className="md:hidden space-y-3">
+        {paginated.length === 0 && (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500 text-sm">
+            No users found
+          </div>
+        )}
+        {paginated.map(user => (
+          <div key={user._id} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
+                <p className="text-xs text-gray-500 font-mono truncate mt-0.5">{user.email}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${getRoleBadge(user.role)}`}>
+                  {getRoleLabel(user.role)}
+                </span>
+                <button
+                  onClick={(e) => handleMenuToggle(e, user._id)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <UserCog size={16} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-semibold text-gray-500">{safePage} / {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* ── Fixed-position action menu ── */}
+      {menuState && menuUser && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenuState(null)} />
+          <div
+            className="fixed z-50 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1"
+            style={{ top: menuState.top, right: menuState.right }}
+          >
+            <button
+              onClick={() => handleOpenEditModal(menuUser)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+            {!isResidentMenu && (
+              <button
+                onClick={() => handleResetPassword(menuUser)}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-amber-600 flex items-center gap-2"
+              >
+                <KeyRound size={14} /> Reset Password
+              </button>
+            )}
+            <button
+              onClick={() => openDeleteConfirmation(menuUser._id)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-red-600 flex items-center gap-2"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── Create / Edit modal ── */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md relative">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                 {isEditMode ? "Edit User" : "Create New User"}
               </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={24} />
               </button>
             </div>
 
-            <form
-              onSubmit={isEditMode ? handleUpdateUser : handleCreateUser}
-              className="p-6"
-            >
+            <form onSubmit={isEditMode ? handleUpdateUser : handleCreateUser} className="p-6">
               <div className="space-y-5">
-                {/* First Name + Last Name — always shown first so email auto-fills */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      First Name
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
                     <input
-                      type="text"
-                      value={formData.firstName}
+                      type="text" value={formData.firstName}
                       onChange={(e) => handleNameChange("firstName", e.target.value)}
                       className="text-sm w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
-                      required
-                      disabled={isLoading}
-                      placeholder="Juan"
+                      required disabled={isLoading} placeholder="Juan"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Last Name
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
                     <input
-                      type="text"
-                      value={formData.lastName}
+                      type="text" value={formData.lastName}
                       onChange={(e) => handleNameChange("lastName", e.target.value)}
                       className="text-sm w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
-                      required
-                      disabled={isLoading}
-                      placeholder="Dela Cruz"
+                      required disabled={isLoading} placeholder="Dela Cruz"
                     />
                   </div>
                 </div>
 
-                {/* System login email — read-only, auto-generated from name */}
                 {!isEditMode && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        System Login Email
-                      </label>
-                      {formData.email && (
-                        <span className="text-xs text-blue-500 font-medium">
-                          auto-generated
-                        </span>
-                      )}
+                      <label className="block text-sm font-medium text-gray-700">System Login Email</label>
+                      {formData.email && <span className="text-xs text-blue-500 font-medium">auto-generated</span>}
                     </div>
                     <input
-                      type="email"
-                      value={formData.email}
-                      readOnly
-                      className="text-sm w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg font-mono text-gray-600 cursor-default select-all"
-                      placeholder="Fill in the name fields above"
-                      tabIndex={-1}
+                      type="email" value={formData.email} readOnly
+                      className="text-sm w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg font-mono text-gray-600 cursor-default"
+                      placeholder="Fill in the name fields above" tabIndex={-1}
                     />
                   </div>
                 )}
 
-                {/* Role */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Role
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                   <select
                     value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="text-sm w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 cursor-pointer"
                     disabled={isLoading}
                   >
@@ -480,38 +623,23 @@ export default function ManageUsersPage() {
                   </select>
                 </div>
 
-                {/* Password - create only */}
                 {!isEditMode && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Password
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                     <div className="flex gap-2">
                       <input
                         type={showPassword ? "text" : "password"}
                         value={formData.password}
-                        onChange={(e) =>
-                          setFormData({ ...formData, password: e.target.value })
-                        }
-                        className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2  font-mono text-sm"
-                        required
-                        minLength={6}
-                        disabled={isLoading}
-                        placeholder="Min 6 characters"
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 font-mono text-sm"
+                        required minLength={6} disabled={isLoading} placeholder="Min 6 characters"
                       />
-                      <button
-                        type="button"
-                        onClick={copyPassword}
-                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
-                        title="Copy password"
-                      >
+                      <button type="button" onClick={copyPassword}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Copy password">
                         <Copy size={18} className="text-gray-600" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={generatePassword}
-                        className="px-2 py-1 text-xs text-gray-700 font-medium bg-white hover:bg-gray-200 rounded-lg border border-gray-400"
-                      >
+                      <button type="button" onClick={generatePassword}
+                        className="px-2 py-1 text-xs text-gray-700 font-medium bg-white hover:bg-gray-200 rounded-lg border border-gray-400">
                         Generate
                       </button>
                     </div>
@@ -519,26 +647,16 @@ export default function ManageUsersPage() {
                 )}
               </div>
 
-              {/* Footer Buttons */}
               <div className="flex gap-3 mt-8">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
+                <button type="button" onClick={() => setIsModalOpen(false)}
                   className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                  disabled={isLoading}
-                >
+                  disabled={isLoading}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                <button type="submit"
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
-                  disabled={isLoading}
-                >
-                  {isLoading
-                    ? "Saving..."
-                    : isEditMode
-                      ? "Update User"
-                      : "Create User"}
+                  disabled={isLoading}>
+                  {isLoading ? "Saving..." : isEditMode ? "Update User" : "Create User"}
                 </button>
               </div>
             </form>
@@ -546,10 +664,10 @@ export default function ManageUsersPage() {
         </div>
       )}
 
-      {/* Reset Password Result Modal */}
+      {/* ── Reset password result ── */}
       {resetResult && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
                 <KeyRound size={18} className="text-amber-600" />
@@ -560,59 +678,44 @@ export default function ManageUsersPage() {
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-3">
-              Share this temporary password with the user. They will be required
-              to set a new password on their next login.
+              Share this temporary password with the user. They will be required to set a new password on their next login.
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3 mb-5">
-              <span className="font-mono text-sm font-semibold text-gray-900 break-all">
-                {resetResult.tempPassword}
-              </span>
+              <span className="font-mono text-sm font-semibold text-gray-900 break-all">{resetResult.tempPassword}</span>
               <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(resetResult.tempPassword);
-                  showAlert("Temporary password copied!");
-                }}
+                onClick={async () => { await navigator.clipboard.writeText(resetResult.tempPassword); showAlert("Temporary password copied!"); }}
                 className="shrink-0 p-1.5 hover:bg-gray-200 rounded"
-                title="Copy"
               >
                 <Copy size={15} className="text-gray-500" />
               </button>
             </div>
-            <button
-              onClick={() => setResetResult(null)}
-              className="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
-            >
+            <button onClick={() => setResetResult(null)}
+              className="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800">
               Done
             </button>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ── Delete confirmation ── */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
             <h3 className="text-lg font-semibold mb-2">Confirm Delete</h3>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this user? This action cannot be
-              undone.
+              Are you sure you want to delete this user? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setUserToDelete(null);
-                }}
+                onClick={() => { setShowDeleteConfirm(false); setUserToDelete(null); }}
                 className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 disabled={isLoading}
               >
                 Cancel
               </button>
-              <button
-                onClick={confirmDeleteUser}
+              <button onClick={confirmDeleteUser}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                disabled={isLoading}
-              >
+                disabled={isLoading}>
                 {isLoading ? "Deleting..." : "Delete"}
               </button>
             </div>
