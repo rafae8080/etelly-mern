@@ -6,12 +6,7 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
-  FlaskConical,
 } from "lucide-react";
-
-const IS_DEV_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("dev") === "true";
 
 // core
 import BaseMap from "../components/map/core/BaseMap";
@@ -110,12 +105,12 @@ function InvalidateSizeOnChange({ trigger }) {
 }
 
 const INITIAL_LAYERS = {
-  flood: false,
-  earthquake: false,
+  flood: true,
+  earthquake: true,
   typhoon: false,
   fire: false,
   landslide: false,
-  reports: false,
+  reports: true,
   evacuation: false,
 };
 
@@ -434,12 +429,6 @@ export default function HazardMapPage() {
             <span className="text-gray-500 text-xs hidden sm:inline">
               — CDRRMO Disaster Monitoring
             </span>
-            {IS_DEV_MODE && (
-              <span className="flex items-center gap-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <FlaskConical size={10} />
-                DEV
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -484,12 +473,6 @@ export default function HazardMapPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Hazard Map</h1>
-            {IS_DEV_MODE && (
-              <span className="flex items-center gap-1 bg-yellow-100 border border-yellow-300 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <FlaskConical size={11} />
-                DEV MODE
-              </span>
-            )}
           </div>
           <p className="text-sm text-slate-500 mt-0.5">
             {CITY_NAME} — Disaster Preparedness Viewer

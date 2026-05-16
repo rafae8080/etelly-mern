@@ -20,6 +20,13 @@ const fetchLandslideAlerts = () =>
         ),
     );
 
+const fetchRainfall = () =>
+  fetch("/api/hazard/rainfall-hourly")
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+
 const SEVERITY_ORDER = { evacuate: 0, critical: 1, warning: 2, watch: 3 };
 
 const HEADER_STYLE = {
@@ -117,12 +124,24 @@ function getAlertCoords(alert) {
   return m ? [parseFloat(m[1]), parseFloat(m[2])] : null;
 }
 
+const alertTimeAgo = (ts) => {
+  if (!ts) return null;
+  const ms = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
 const AlertCard = ({ alert, onFlyTo }) => {
   const s   = SEVERITY_BADGE[alert.severity] ?? SEVERITY_BADGE.watch;
   const src = SOURCE_INFO[alert.source] ?? { label: alert.source ?? "Advisory", cls: "bg-gray-50 text-gray-500 border-gray-200" };
   const locationName = getLocationName(alert);
   const locationChip = getLocationChip(alert);
   const coords = getAlertCoords(alert);
+  const issuedAgo = alertTimeAgo(alert.createdAt);
 
   return (
     <div
@@ -148,6 +167,11 @@ const AlertCard = ({ alert, onFlyTo }) => {
       <p className={`text-[9px] leading-snug mt-1 ${s.descCls}`}>
         {extractReason(alert.description)}
       </p>
+      {issuedAgo && (
+        <p className="text-[8px] text-gray-400 mt-1.5 pt-1 border-t border-gray-100">
+          Issued {issuedAgo}
+        </p>
+      )}
     </div>
   );
 };
@@ -161,6 +185,12 @@ const LandslideForecastPanelContent = ({ isOpen, onToggle, topStyle, onFlyTo, on
     cachedAt,
     refresh,
   } = useOfflineCache("landslide-alerts", fetchLandslideAlerts, 2 * 60 * 1000);
+
+  const { data: rainfallData } = useOfflineCache(
+    "rainfall-hourly",
+    fetchRainfall,
+    10 * 60 * 1000,
+  );
 
   const allAlerts = data ?? [];
 
@@ -221,6 +251,40 @@ const LandslideForecastPanelContent = ({ isOpen, onToggle, topStyle, onFlyTo, on
           {/* Body */}
           <div className="flex-1 overflow-y-auto flex flex-col">
             <div className="px-4 py-3 flex flex-col gap-2">
+
+              {/* Rainfall context — shows current & 6h peak so CDRRMO understands why an alert fired */}
+              {rainfallData?.hours?.length > 0 && (() => {
+                const current = rainfallData.hours[0];
+                const peak    = rainfallData.hours.slice(0, 6).reduce((mx, h) =>
+                  h.precipitation > mx.precipitation ? h : mx
+                );
+                const levelColor = (lvl) =>
+                  lvl >= 3 ? "text-red-600" : lvl >= 2 ? "text-amber-600" : lvl >= 1 ? "text-blue-600" : "text-gray-400";
+                return (
+                  <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+                    <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mb-1.5">
+                      Current Rainfall
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-gray-500">Now</span>
+                        <span className={`font-semibold ${levelColor(current.pagasa?.level ?? 0)}`}>
+                          {current.precipitation > 0 ? `${current.precipitation.toFixed(1)} mm/hr` : "0 mm/hr"} · {current.pagasa?.label ?? "None"}
+                        </span>
+                      </div>
+                      {peak.precipitation > current.precipitation && peak.precipitation > 0 && (
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-gray-500">6h peak</span>
+                          <span className={`font-semibold ${levelColor(peak.pagasa?.level ?? 0)}`}>
+                            {peak.precipitation.toFixed(1)} mm/hr · {peak.pagasa?.label ?? "None"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {alertsLoading && !hasAlerts ? (
                 <div className="py-4 flex items-center justify-center gap-2">
                   <div className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin" />

@@ -135,7 +135,9 @@ export default function DashboardPage() {
   const userRole = user?.role ?? null;
 
   const fetchReports = useCallback(() => {
-    fetch(`${API_BASE}/api/reports`)
+    fetch(`${API_BASE}/api/reports`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
+    })
       .then((r) => r.json())
       .then((data) => {
         if (data.success && data.reports) setReports(data.reports);

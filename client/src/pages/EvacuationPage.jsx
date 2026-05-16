@@ -33,7 +33,7 @@ const BARANGAYS = [
   { value: "beverlyhills", label: "Brgy. Beverly Hills",  hotlines: ["0930-027-6922", "8518-2988", "0966-661-4839"] },
   { value: "calawis",      label: "Brgy. Calawis",        hotlines: ["0994-833-9165"] },
   { value: "cupang",       label: "Brgy. Cupang",         hotlines: ["0968-491-8172", "0910-524-9816", "0953-669-4295", "682-4946", "682-4837"] },
-  { value: "dalig",        label: "Brgy. Dalig",          hotlines: ["0968-491-8172", "0910-524-9816", "0953-669-4295", "682-4946", "682-4837"] },
+  { value: "dalig",        label: "Brgy. Dalig",          hotlines: [] },
   { value: "delapaz",      label: "Brgy. Dela Paz",       hotlines: ["8260-0182", "0960-604-4446"] },
   { value: "inarawan",     label: "Brgy. Inarawan",       hotlines: ["0956-084-5977"] },
   { value: "mambugan",     label: "Brgy. Mambugan",       hotlines: ["0928-776-7525", "0998-475-1517"] },
@@ -58,6 +58,12 @@ function authHeaders() {
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: authHeaders() });
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

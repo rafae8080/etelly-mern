@@ -1,34 +1,9 @@
 import { useEffect } from "react";
 import { Polyline, Popup, Circle, Marker, CircleMarker } from "react-leaflet";
-import { Wind, X, FlaskConical, WifiOff } from "lucide-react";
+import { Wind, X, WifiOff } from "lucide-react";
 import L from "leaflet";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
-// ── Dev test mode ─────────────────────────────────────────────────────────
-const IS_DEV_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("dev") === "true";
-
-const DEV_FAKE_STORM = {
-  id: "dev-test-001",
-  name: "TEST STORM (Dev Mode)",
-  lat: 14.5,
-  lon: 120.8,
-  windKph: 150,
-  windKnots: 81,
-  category: { label: "Typhoon (TY)", color: "#dc2626", level: 4 },
-  movement: 20,
-  direction: 315,
-  updatedAt: new Date().toISOString(),
-  windRadiusKm: 100,
-  forecastTrack: [
-    { lat: 12.5, lon: 124.8, label: "previous position", trackdate: null, windKph: null, windGusts: null, category: null },
-    { lat: 13.2, lon: 123.5, label: "previous position", trackdate: null, windKph: null, windGusts: null, category: null },
-    { lat: 14.5, lon: 120.8, label: "07/05/2026 06:00:00", trackdate: "07/05/2026 06:00:00", windKph: 150, windGusts: 175, category: { label: "Typhoon (TY)", color: "#dc2626", level: 4 } },
-    { lat: 15.2, lon: 119.0, label: "08/05/2026 06:00:00", trackdate: "08/05/2026 06:00:00", windKph: 130, windGusts: 155, category: { label: "Typhoon (TY)", color: "#dc2626", level: 4 } },
-    { lat: 16.0, lon: 117.5, label: "09/05/2026 06:00:00", trackdate: "09/05/2026 06:00:00", windKph: 100, windGusts: 120, category: { label: "Severe Tropical Storm (STS)", color: "#f97316", level: 3 } },
-  ],
-};
 
 // PAGASA 2022 category → Tailwind bg/text classes for UI cards
 const CATEGORY_STYLE = {
@@ -221,14 +196,6 @@ function StormMapLayer({ storm }) {
       <Marker position={[storm.lat, storm.lon]} icon={icon}>
         <Popup>
           <div className="min-w-[200px]">
-            {IS_DEV_MODE && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1 mb-2 flex items-center gap-1.5">
-                <FlaskConical size={10} className="text-yellow-600" />
-                <span className="text-[9px] text-yellow-700 font-bold">
-                  DEV TEST — Not a real storm
-                </span>
-              </div>
-            )}
             <div
               className={`flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg ${catStyle.bg}`}
             >
@@ -336,9 +303,9 @@ const TyphoonLayer = ({ visible }) => {
 
   // Only hide when truly offline AND the IndexedDB copy is >24 h old.
   // When online the server already filters dissipated storms via todate age.
-  const isHideStale = !IS_DEV_MODE && isOffline && cachedAt != null && (Date.now() - cachedAt) > 24 * 60 * 60 * 1000;
+  const isHideStale = isOffline && cachedAt != null && (Date.now() - cachedAt) > 24 * 60 * 60 * 1000;
 
-  const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : (isHideStale ? [] : (data?.storms ?? []));
+  const storms = isHideStale ? [] : (data?.storms ?? []);
 
   return (
     <>
@@ -367,7 +334,6 @@ export const TyphoonPanel = ({
 
   // Notify parent of offline state — same pattern as LandslideForecastPanel
   useEffect(() => {
-    if (IS_DEV_MODE) return;
     if (typeof onOfflineChange === "function") {
       onOfflineChange({ isOffline, cachedAt });
     }
@@ -375,9 +341,8 @@ export const TyphoonPanel = ({
 
   if (!visible) return null;
 
-  const realStorms = data?.storms ?? [];
-  const storms = IS_DEV_MODE ? [DEV_FAKE_STORM] : realStorms;
-  const hasActiveStorm = IS_DEV_MODE ? true : (data?.hasActiveStorm ?? false);
+  const storms = data?.storms ?? [];
+  const hasActiveStorm = data?.hasActiveStorm ?? false;
 
   // Derive button accent color from the highest PAGASA category level among active storms
   const highestLevel = storms.reduce((max, s) => Math.max(max, s.category?.level ?? 0), 0);
@@ -400,8 +365,8 @@ export const TyphoonPanel = ({
 
   // cacheAgeMs is only meaningful when offline (using IndexedDB fallback).
   const cacheAgeMs = isOffline && cachedAt != null ? Date.now() - cachedAt : null;
-  const isWarnStale = !IS_DEV_MODE && cacheAgeMs != null && cacheAgeMs > 6 * 60 * 60 * 1000;
-  const isHideStale = !IS_DEV_MODE && cacheAgeMs != null && cacheAgeMs > 24 * 60 * 60 * 1000;
+  const isWarnStale = cacheAgeMs != null && cacheAgeMs > 6 * 60 * 60 * 1000;
+  const isHideStale = cacheAgeMs != null && cacheAgeMs > 24 * 60 * 60 * 1000;
 
   return (
     <>
@@ -419,12 +384,6 @@ export const TyphoonPanel = ({
                         : `${hasActiveStorm ? btnBorderClass : "bg-white border-gray-300"}`
                     }`}
       >
-        {IS_DEV_MODE && (
-          <span
-            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 border border-white"
-            title="Dev mode — fake storm injected"
-          />
-        )}
         <Wind
           size={15}
           strokeWidth={1.8}
@@ -463,12 +422,7 @@ export const TyphoonPanel = ({
                       {storms.length} ACTIVE
                     </span>
                   )}
-                  {IS_DEV_MODE && (
-                    <span className="text-[8px] bg-yellow-100 text-yellow-700 font-bold px-1.5 py-0.5 rounded">
-                      DEV
-                    </span>
-                  )}
-                  {!IS_DEV_MODE && isOffline && (
+                  {isOffline && (
                     <WifiOff
                       size={10}
                       className="text-amber-500"
@@ -478,7 +432,7 @@ export const TyphoonPanel = ({
                 </div>
                 <p className="text-[10px] text-gray-400">
                   GDACS · PAGASA 2022
-                  {!IS_DEV_MODE && isOffline && cachedAt && (
+                  {isOffline && cachedAt && (
                     <span className="text-amber-500 ml-1">
                       · cached {timeAgo(cachedAt)}
                     </span>
@@ -512,7 +466,7 @@ export const TyphoonPanel = ({
           )}
 
           {/* Loading */}
-          {loading && !IS_DEV_MODE && (
+          {loading && (
             <div className="px-4 py-4 flex items-center gap-2">
               <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
               <span className="text-xs text-gray-400">
@@ -585,6 +539,11 @@ export const TyphoonPanel = ({
                                               ? "bg-green-50 text-green-600"
                                               : "bg-gray-100 text-gray-400"
                                           }`}
+                            title={
+                              storm.windRadiusSource === "gdacs"
+                                ? "Radius from GDACS data"
+                                : "Estimated from wind speed using PAGASA category radii — not a measured value"
+                            }
                           >
                             {storm.windRadiusSource === "gdacs"
                               ? "GDACS"

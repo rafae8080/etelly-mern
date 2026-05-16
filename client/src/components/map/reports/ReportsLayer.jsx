@@ -368,6 +368,8 @@ function createAlertPopup(alert) {
     ? alert.type.charAt(0).toUpperCase() + alert.type.slice(1)
     : "";
 
+  const sourceLabel = alert.source ? `${alert.source} Advisory` : "Official Advisory";
+
   return `
     <div style="font-family:system-ui,sans-serif;min-width:230px;max-width:280px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
@@ -375,9 +377,11 @@ function createAlertPopup(alert) {
                      padding:2px 8px;border-radius:999px">${sev.label}</span>
         <span style="font-size:11px;color:#6b7280;background:#f3f4f6;
                      padding:2px 6px;border-radius:999px">${typeLabel}</span>
-        ${alert.source ? `<span style="font-size:10px;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:999px">${alert.source}</span>` : ""}
       </div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 6px;color:#111827;line-height:1.3">
+      <p style="font-weight:700;font-size:14px;margin:0 0 4px;color:#111827;line-height:1.3">
+        ${sourceLabel}
+      </p>
+      <p style="font-size:12px;font-weight:500;color:#374151;margin:0 0 6px;line-height:1.3">
         ${alert.title ?? "—"}
       </p>
       <p style="font-size:12px;color:#374151;margin:0 0 8px;line-height:1.5">

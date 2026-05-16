@@ -2,6 +2,25 @@ import { useState, useEffect } from "react";
 import { Activity, RefreshCw, WifiOff, X } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
+const MAG_COLOR = (mag) => {
+  if (mag >= 7.0) return "#b91c1c";
+  if (mag >= 6.0) return "#ef4444";
+  if (mag >= 5.0) return "#f97316";
+  if (mag >= 4.0) return "#eab308";
+  if (mag >= 3.0) return "#06b6d4";
+  return "#6b7280";
+};
+
+const quakeTimeAgo = (ms) => {
+  if (!ms) return "";
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
 const TIME_RANGES = [
   { value: "day", label: "Past 24 Hours" },
   { value: "week", label: "Past 7 Days" },
@@ -60,7 +79,7 @@ export default function EarthquakePanel({
     region: "philippines",
     limit: 100,
   });
-  const { isOffline, cachedAt } = useOfflineCache(
+  const { data: quakeData, loading: quakeLoading, isOffline, cachedAt } = useOfflineCache(
     "earthquake",
     fetchEarthquakeDefault,
     5 * 60 * 1000,
@@ -160,7 +179,7 @@ export default function EarthquakePanel({
             </div>
           </div>
 
-          {/* Filters — always visible */}
+          {/* Filters + quake list */}
           <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
             <div>
               <label className="text-xs font-medium text-gray-700 mb-1 block">
@@ -213,6 +232,58 @@ export default function EarthquakePanel({
                   Philippines only
                 </span>
               </label>
+            </div>
+
+            {/* Recent earthquake list */}
+            <div className="border-t border-gray-100 pt-3">
+              {quakeLoading && (
+                <div className="flex items-center gap-2 py-2">
+                  <div className="w-3 h-3 border border-orange-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[10px] text-gray-400">Loading earthquakes…</span>
+                </div>
+              )}
+              {!quakeLoading && (() => {
+                const features = quakeData?.features ?? [];
+                const sorted = [...features]
+                  .sort((a, b) => b.properties.time - a.properties.time)
+                  .slice(0, 8);
+                if (sorted.length === 0) return (
+                  <p className="text-[10px] text-gray-400 text-center py-2">No earthquakes in this filter range.</p>
+                );
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                        Recent Events
+                      </p>
+                      <span className="text-[9px] text-gray-400">{features.length} total</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {sorted.map((f) => {
+                        const p   = f.properties;
+                        const mag = p.mag ?? 0;
+                        const col = MAG_COLOR(mag);
+                        return (
+                          <div key={f.id} className="flex items-start gap-2 rounded-lg bg-gray-50 px-2 py-1.5">
+                            <span
+                              className="text-[11px] font-bold w-8 text-center shrink-0 mt-0.5"
+                              style={{ color: col }}
+                            >
+                              M{mag.toFixed(1)}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] text-gray-700 leading-snug truncate">
+                                {p.place ?? "Unknown location"}
+                              </p>
+                              <p className="text-[9px] text-gray-400">{quakeTimeAgo(p.time)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

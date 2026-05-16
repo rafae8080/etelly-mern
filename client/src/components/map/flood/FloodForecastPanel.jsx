@@ -110,12 +110,25 @@ const timeAgo = (ts) => {
   return `${Math.floor(mins / 60)}h ago`;
 };
 
+
+const alertTimeAgo = (ts) => {
+  if (!ts) return null;
+  const ms = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
 const AlertCard = ({ alert, onFlyTo }) => {
   const s   = SEVERITY_BADGE[alert.severity] ?? SEVERITY_BADGE.watch;
   const src = SOURCE_INFO[alert.source] ?? { label: alert.source ?? "Advisory", cls: "bg-gray-50 text-gray-500 border-gray-200" };
   const locationName = getLocationName(alert);
   const locationChip = getLocationChip(alert);
   const coords = getAlertCoords(alert);
+  const issuedAgo = alertTimeAgo(alert.createdAt);
 
   return (
     <div
@@ -141,6 +154,11 @@ const AlertCard = ({ alert, onFlyTo }) => {
       <p className={`text-[9px] leading-snug mt-1 ${s.descCls}`}>
         {extractReason(alert.description)}
       </p>
+      {issuedAgo && (
+        <p className="text-[8px] text-gray-400 mt-1.5 pt-1 border-t border-gray-100">
+          Issued {issuedAgo}
+        </p>
+      )}
     </div>
   );
 };
@@ -284,7 +302,7 @@ const FloodForecastPanel = ({
                 </p>
               </>
             ) : (
-              <div className="py-8 flex flex-col items-center gap-2 text-center">
+              <div className="py-6 flex flex-col items-center gap-2 text-center">
                 <Waves size={22} className="text-gray-200" />
                 <p className="text-xs font-semibold text-gray-400">No active flood alerts</p>
                 <p className="text-[10px] text-gray-300 leading-snug max-w-[180px]">
@@ -292,6 +310,7 @@ const FloodForecastPanel = ({
                 </p>
               </div>
             )}
+
           </div>
 
           {/* Footer */}

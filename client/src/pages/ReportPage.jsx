@@ -7,7 +7,7 @@ const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
 const TABS = [
   { key: "pending",  label: "Pending" },
-  { key: "ongoing",  label: "Ongoing" },
+  { key: "approved", label: "Approved" },
   { key: "resolved", label: "Resolved" },
   { key: "rejected", label: "Rejected" },
 ];
@@ -59,36 +59,46 @@ export default function ReportsPage() {
       if (!hasLoaded.current) setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE}/api/reports`);
+      const response = await fetch(`${API_BASE}/api/reports`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
 
       if (data.success && data.reports) {
-        const formattedReports = data.reports.map((report) => ({
-          id: report._id || report.id,
-          type:
-            report.emergencyType?.charAt(0).toUpperCase() +
-            report.emergencyType?.slice(1),
-          severity: report.severity?.toLowerCase(),
-          rescue: report.emergencyType === "rescue",
-          description: report.description || "No description provided",
-          location:
-            report.location?.exactAddress ||
-            report.location ||
-            "Unknown location",
-          timestamp: new Date(report.timestamp).toLocaleString(),
-          reportedBy:
-            report.userData?.fullName || report.userName || "Anonymous",
-          hasImage: report.images?.length > 0,
-          imageUrl: report.images?.[0] || null,
-          status: report.status || "pending",
-          adminNotes: report.adminNotes || null,
-          resolvedBy: report.resolvedBy || null,
-          resolvedAt: report.resolvedAt || null,
-          resolutionNotes: report.resolutionNotes || null,
-          logs: report.logs || [],
-        }));
+        const seen = new Set();
+        const formattedReports = data.reports
+          .filter((report) => {
+            const id = String(report._id || report.id || "");
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          })
+          .map((report) => ({
+            id: String(report._id || report.id || ""),
+            type:
+              report.emergencyType?.charAt(0).toUpperCase() +
+              report.emergencyType?.slice(1),
+            severity: report.severity?.toLowerCase(),
+            rescue: report.emergencyType === "rescue",
+            description: report.description || "No description provided",
+            location:
+              report.location?.exactAddress ||
+              report.location ||
+              "Unknown location",
+            timestamp: new Date(report.timestamp).toLocaleString(),
+            reportedBy:
+              report.userData?.fullName || report.userName || "Anonymous",
+            hasImage: report.images?.length > 0,
+            imageUrl: report.images?.[0] || null,
+            status: report.status || "pending",
+            adminNotes: report.adminNotes || null,
+            resolvedBy: report.resolvedBy || null,
+            resolvedAt: report.resolvedAt || null,
+            resolutionNotes: report.resolutionNotes || null,
+            logs: report.logs || [],
+          }));
 
         setReports(formattedReports);
       } else {
@@ -106,7 +116,10 @@ export default function ReportsPage() {
     try {
       const response = await fetch(`${API_BASE}/api/reports/update-status`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+        },
         body: JSON.stringify({
           reportId,
           status,
@@ -135,7 +148,10 @@ export default function ReportsPage() {
     try {
       const response = await fetch(`${API_BASE}/api/reports/resolve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
+        },
         body: JSON.stringify({ reportId, resolvedBy: actingUser, resolutionNotes }),
       });
       const data = await response.json();

@@ -122,7 +122,9 @@ function createFloodAlertPopup(alert) {
                padding:1px 6px;border-radius:999px;margin:2px 2px 0 0;">${b}</span>`,
           )
           .join("")
-      : '<span style="font-size:11px;color:#374151;font-weight:600;">Antipolo City — City-wide Advisory</span>';
+      : alert.source === "system"
+        ? '<span style="font-size:11px;color:#374151;font-weight:600;">Antipolo City — City-wide Advisory</span>'
+        : `<span style="font-size:11px;color:#374151;font-weight:600;">${alert.source} Advisory</span>`;
 
   return `
     <div style="font-family:system-ui,-apple-system,sans-serif;min-width:220px;max-width:280px;">
@@ -151,7 +153,7 @@ function createFloodAlertPopup(alert) {
       </p>
       <div style="margin-bottom:10px;">
         <p style="font-size:10px;font-weight:700;color:#6b7280;margin:0 0 4px 0;text-transform:uppercase;letter-spacing:0.05em;">
-          ${alert.barangays?.length > 0 ? "Affected Barangays" : "Coverage"}
+          ${alert.barangays?.length > 0 ? "Affected Barangays" : alert.source === "system" ? "Coverage" : "Issued By"}
         </p>
         <div>${barangayList}</div>
       </div>

@@ -9,11 +9,6 @@ import {
 } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
-// ── Dev test mode ─────────────────────────────────────────────────────────
-const IS_DEV_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("dev") === "true";
-
 function classifyPAGASA(mmPerHour) {
   if (mmPerHour >= 60)
     return { label: "Torrential", level: 5, color: "#7c3aed" };
@@ -24,23 +19,6 @@ function classifyPAGASA(mmPerHour) {
   if (mmPerHour > 0) return { label: "Light", level: 1, color: "#3b82f6" };
   return { label: "None", level: 0, color: "#9ca3af" };
 }
-
-const DEV_FAKE_MM = [0, 2, 8, 16, 32, 65, 45, 20, 10, 4, 1, 0];
-const now = new Date();
-const DEV_FAKE_DATA = {
-  overallPagasa: classifyPAGASA(65),
-  currentHour: now.getHours(),
-  location: { lat: 14.5882, lon: 121.1763 },
-  generatedAt: now.toISOString(),
-  hours: DEV_FAKE_MM.map((mm, i) => ({
-    time: "",
-    hour: (now.getHours() + i) % 24,
-    precipitation: mm,
-    probability: Math.round(Math.min(mm * 1.5 + 10, 98)),
-    weathercode: mm > 30 ? 65 : mm > 0 ? 61 : 0,
-    pagasa: classifyPAGASA(mm),
-  })),
-};
 
 // ── Per-level icon config ─────────────────────────────────────────────────
 // Each PAGASA level maps to a distinct lucide icon + fixed size + color token.
@@ -114,8 +92,8 @@ const RainfallStrip = ({ visible }) => {
     error,
   } = useOfflineCache("rainfall-hourly", fetchRainfall, 30 * 60 * 1000);
 
-  const data = IS_DEV_MODE ? DEV_FAKE_DATA : liveData;
-  const loading = IS_DEV_MODE ? false : liveLoading;
+  const data = liveData;
+  const loading = liveLoading;
 
   if (!visible) return null;
 
@@ -139,17 +117,12 @@ const RainfallStrip = ({ visible }) => {
           <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
             12-Hour Rainfall
           </span>
-          {IS_DEV_MODE && (
-            <span className="text-[8px] bg-yellow-100 text-yellow-700 font-bold px-1 py-0.5 rounded">
-              DEV
-            </span>
-          )}
-          {!IS_DEV_MODE && isOffline && (
+          {isOffline && (
             <WifiOff size={9} className="text-amber-500" title="Cached data" />
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {!IS_DEV_MODE && isOffline && cachedAt && (
+          {isOffline && cachedAt && (
             <span className="text-[8px] text-amber-500">
               cached {timeAgo(cachedAt)}
             </span>
@@ -184,11 +157,13 @@ const RainfallStrip = ({ visible }) => {
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {data.hours.map((h, i) => {
-            const label = h.pagasa?.label ?? "None";
-            const cfg = PAGASA_CONFIG[label];
-            const lvl = LEVEL_ICON[label] ?? LEVEL_ICON.None;
+            const isTrace = h.precipitation === 0 && h.probability >= 30;
+            const effectiveLabel = isTrace ? "Light" : (h.pagasa?.label ?? "None");
+            const cfg   = PAGASA_CONFIG[effectiveLabel];
+            const lvl   = LEVEL_ICON[effectiveLabel] ?? LEVEL_ICON.None;
             const { Icon, sz, sw } = lvl;
             const isNow = i === 0;
+            const showProb = h.precipitation > 0 || h.probability >= 30;
 
             return (
               <div
@@ -215,26 +190,28 @@ const RainfallStrip = ({ visible }) => {
                   />
                 </div>
 
-                {/* mm value */}
+                {/* mm value — shows "trace" when probability≥30% but no measurable amount */}
                 <span
                   className={`text-[10px] font-bold leading-none ${cfg.text}`}
                 >
-                  {h.precipitation > 0 ? h.precipitation.toFixed(1) : "—"}
-                  {h.precipitation > 0 && (
-                    <span className="text-[8px] font-normal"> mm</span>
-                  )}
+                  {h.precipitation > 0
+                    ? <>{h.precipitation.toFixed(1)}<span className="text-[8px] font-normal"> mm</span></>
+                    : isTrace
+                      ? <span className="text-[9px] font-semibold italic">trace</span>
+                      : "—"
+                  }
                 </span>
 
                 {/* PAGASA label */}
                 <span
                   className={`text-[8px] font-semibold text-center leading-tight ${cfg.text}`}
                 >
-                  {label}
+                  {isTrace ? "Trace" : effectiveLabel}
                 </span>
 
-                {/* Rain probability */}
-                {h.probability > 0 && (
-                  <span className="text-[8px] text-gray-400 leading-none">
+                {/* Probability — only shown when meaningful */}
+                {showProb && (
+                  <span className="text-[8px] text-gray-400 leading-none" title="Rain probability">
                     {h.probability}%
                   </span>
                 )}

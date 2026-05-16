@@ -15,12 +15,11 @@ const FLOOD_LEGEND = {
   label: "Flood",
   Icon: Droplets,
   iconColor: "text-blue-500",
-  note: "Alert markers: PAGASA advisory levels · Tile: Phil-LiDAR WMS",
+  note: "Tile: Phil-LiDAR WMS (25-yr flood hazard) · Source: UP DREAM / DOST",
   rows: [
-    { color: "#dc2626", label: "Evacuate — Flash flooding imminent" },
-    { color: "#dc2626", label: "Critical — Continuous heavy rainfall" },
-    { color: "#f59e0b", label: "Warning — Heavy rain forecast" },
-    { color: "#3b82f6", label: "Watch — Flood conditions possible" },
+    { color: "#d32f2f", label: "High Hazard — flood depth > 1.5 m" },
+    { color: "#f57c00", label: "Medium Hazard — 0.5 – 1.5 m depth" },
+    { color: "#f9a825", label: "Low Hazard — 0.1 – 0.5 m depth" },
   ],
 };
 
@@ -44,12 +43,11 @@ const LANDSLIDE_LEGEND = {
   label: "Landslide",
   Icon: Mountain,
   iconColor: "text-amber-500",
-  note: "Alert markers: PAGASA/MGB thresholds · Tile: Philippine Geoportal WMS",
+  note: "Tile: MGB Landslide Susceptibility (1:10k) · Source: Philippine Geoportal",
   rows: [
-    { color: "#dc2626", label: "Evacuate — Imminent slope failure" },
-    { color: "#dc2626", label: "Critical — Intense rainfall ongoing" },
-    { color: "#f97316", label: "Warning — Elevated slope risk" },
-    { color: "#3b82f6", label: "Watch — Conditions possible" },
+    { color: "#d32f2f", label: "High Susceptibility" },
+    { color: "#f9a825", label: "Moderate Susceptibility" },
+    { color: "#388e3c", label: "Low Susceptibility" },
   ],
 };
 

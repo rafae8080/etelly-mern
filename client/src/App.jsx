@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import AdminLayout from "./layouts/AdminLayout";
 import InstallPrompt from "./components/pwa/InstallPrompt";
 
@@ -58,6 +59,44 @@ function AuthOnlyRoute({ Page }) {
   return isTokenValid() ? <Page /> : <Navigate to="/login" replace />;
 }
 
+// ── Session expiry warning banner ─────────────────────────────────────────────
+function SessionExpiryBanner() {
+  const [minutesLeft, setMinutesLeft] = useState(null);
+
+  useEffect(() => {
+    function check() {
+      const token = localStorage.getItem("token");
+      if (!token) return setMinutesLeft(null);
+      try {
+        const { exp } = JSON.parse(atob(token.split(".")[1]));
+        if (!exp) return setMinutesLeft(null);
+        const mins = Math.floor((exp * 1000 - Date.now()) / 60000);
+        setMinutesLeft(mins <= 30 && mins > 0 ? mins : null);
+      } catch {
+        setMinutesLeft(null);
+      }
+    }
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (minutesLeft === null) return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-sm font-medium px-4 py-2 flex items-center justify-between shadow-md">
+      <span>Your session expires in {minutesLeft} minute{minutesLeft !== 1 ? "s" : ""}. Save your work and log in again to continue.</span>
+      <a
+        href="/login"
+        onClick={() => { localStorage.removeItem("token"); localStorage.removeItem("user"); }}
+        className="ml-4 underline font-bold whitespace-nowrap hover:text-amber-100"
+      >
+        Log in again
+      </a>
+    </div>
+  );
+}
+
 // ── Layout wrapper (moved outside App to prevent remounts on re-render) ───────
 function ProtectedLayout({ Page }) {
   const userEmail = localStorage.getItem("user")
@@ -71,6 +110,7 @@ function ProtectedLayout({ Page }) {
 
   return (
     <ProtectedRoute>
+      <SessionExpiryBanner />
       <AdminLayout userEmail={userEmail} onLogout={handleLogout}>
         <Page />
       </AdminLayout>

@@ -4,7 +4,7 @@ import { Phone, Mail, ArrowLeft, KeyRound } from "lucide-react";
 export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-6">
-      <div className="absolute inset-0 bg-[url('/images/navotas.jpg')] bg-cover bg-center" />
+      <div className="absolute inset-0 bg-gray-900" />
       <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-red-950/60" />
 
       <div className="relative bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl w-full max-w-md p-10">
