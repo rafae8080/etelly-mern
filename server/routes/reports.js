@@ -72,8 +72,16 @@ router.post("/create", async (req, res) => {
     const db = mongoose.connection.db;
     const reportsCollection = db.collection("emergency_reports");
 
+    const {
+      emergencyType, severity, description, location,
+      latitude, longitude, userName, phoneNumber, images, barangay,
+    } = req.body;
+
     const reportData = {
-      ...req.body,
+      emergencyType, severity, description, location,
+      latitude, longitude, userName, phoneNumber,
+      images: Array.isArray(images) ? images : [],
+      barangay: barangay || "",
       timestamp: new Date(),
       status: "pending",
     };

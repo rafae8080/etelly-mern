@@ -10,7 +10,7 @@ const actionLogSchema = new mongoose.Schema({
 const AlertSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: ["system", "residents", "CDRRMO", "Barangay"],
+    enum: ["system", "residents", "CDRRMO", "Barangay", "PHIVOLCS", "GDACS"],
     required: true,
   },
   type: {

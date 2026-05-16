@@ -42,14 +42,14 @@ export async function runTyphoonCheck() {
       let severity;
       if      (windKph >= 185) severity = "evacuate"; // Super Typhoon (STY)
       else if (windKph >= 118) severity = "critical";  // Typhoon (TY)
-      else if (windKph >= 89)  severity = "warning";   // Severe Tropical Storm (STS)
+      else if (windKph >= 87)  severity = "warning";   // Severe Tropical Storm (STS)
       else                     severity = "watch";     // TS (62-88) or TD (≤61)
 
       // PAGASA 2022 category label for display
       const pagasaLabel =
         windKph >= 185 ? "Super Typhoon (STY)"
         : windKph >= 118 ? "Typhoon (TY)"
-        : windKph >= 89  ? "Severe Tropical Storm (STS)"
+        : windKph >= 87  ? "Severe Tropical Storm (STS)"
         : windKph >= 62  ? "Tropical Storm (TS)"
         :                  "Tropical Depression (TD)";
 

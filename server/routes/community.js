@@ -5,7 +5,7 @@ import InventoryItem    from "../models/InventoryItem.js";
 import InventoryLog     from "../models/InventoryLog.js";
 import Alert            from "../models/Alert.js";
 import User             from "../models/user.js";
-import { protect }      from "../middleware/auth.js";
+import { protect, requireAdminOrBarangay } from "../middleware/auth.js";
 import { pushItemAlert } from "../services/inventoryAlerts.js";
 import { sendPushToAll } from "./push.js";
 
@@ -144,7 +144,7 @@ router.post("/requests", async (req, res) => {
 });
 
 // PATCH /api/community/requests/:id/approve
-router.patch("/requests/:id/approve", protect, async (req, res) => {
+router.patch("/requests/:id/approve", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
     const request = await ResourceRequest.findById(req.params.id);
@@ -162,7 +162,7 @@ router.patch("/requests/:id/approve", protect, async (req, res) => {
 });
 
 // PATCH /api/community/requests/:id/reject
-router.patch("/requests/:id/reject", protect, async (req, res) => {
+router.patch("/requests/:id/reject", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
     if (!note?.trim()) return res.status(400).json({ success: false, error: "A reason is required when rejecting a request." });
@@ -182,7 +182,7 @@ router.patch("/requests/:id/reject", protect, async (req, res) => {
 });
 
 // PATCH /api/community/requests/:id/fulfill
-router.patch("/requests/:id/fulfill", protect, async (req, res) => {
+router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
     const request = await ResourceRequest.findById(req.params.id);
@@ -262,7 +262,7 @@ router.post("/donations", async (req, res) => {
 });
 
 // PATCH /api/community/donations/:id/schedule
-router.patch("/donations/:id/schedule", protect, async (req, res) => {
+router.patch("/donations/:id/schedule", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { dropOffPoint, scheduledWindow, note } = req.body;
     if (!dropOffPoint?.trim()) return res.status(400).json({ success: false, error: "Drop-off point is required." });
@@ -284,7 +284,7 @@ router.patch("/donations/:id/schedule", protect, async (req, res) => {
 });
 
 // PATCH /api/community/donations/:id/receive
-router.patch("/donations/:id/receive", protect, async (req, res) => {
+router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
     const donation = await ResourceDonation.findById(req.params.id);

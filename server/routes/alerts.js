@@ -242,4 +242,29 @@ router.patch("/:id/resolve", protect, async (req, res) => {
   }
 });
 
+// PATCH /api/alerts/:id/reactivate — restore a dismissed alert (admin only)
+router.patch("/:id/reactivate", protect, async (req, res) => {
+  try {
+    const actorName = req.user.name ?? req.user.email ?? "admin";
+    const alert = await Alert.findByIdAndUpdate(
+      req.params.id,
+      {
+        isActive: true,
+        updatedAt: new Date(),
+        $push: { actionLog: { action: "created", by: actorName } },
+      },
+      { new: true },
+    );
+    if (!alert) return res.status(404).json({ error: "Alert not found" });
+
+    const io = req.app.get("io");
+    if (io) io.emit("alert_updated", { id: req.params.id, isActive: true });
+
+    res.json({ ok: true, alert });
+  } catch (err) {
+    console.error("❌ Reactivate alert:", err.message);
+    res.status(500).json({ error: "Failed to reactivate alert" });
+  }
+});
+
 export default router;

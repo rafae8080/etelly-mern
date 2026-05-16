@@ -16,6 +16,9 @@ import communityRoutes from "./routes/community.js";
 import pushRoutes, { sendPushToAll } from "./routes/push.js";
 import inventoryRoutes from "./routes/inventory.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
+import Alert from "./models/Alert.js";
+import { protect, requireAdmin, requireAdminOrBarangay } from "./middleware/auth.js";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
@@ -36,7 +39,7 @@ const corsOptions = {
     );
     callback(allowed ? null : new Error("Not allowed by CORS"), allowed);
   },
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
 };
 
@@ -49,10 +52,31 @@ const io = new Server(server, {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, error: "Too many login attempts, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const publicPostLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { success: false, error: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Make io accessible inside route handlers via req.app.get("io")
 app.set("io", io);
 
 // Routes
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/reports/create", publicPostLimiter);
+app.post("/api/community/requests", publicPostLimiter);
+app.post("/api/community/donations", publicPostLimiter);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/hazard", hazardRoutes);
@@ -76,8 +100,8 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "Server is running" });
 });
 
-// GET all reports — raw collection access for the base /api/reports path (not covered by reportRoutes)
-app.get("/api/reports", async (req, res) => {
+// GET all reports — admin only
+app.get("/api/reports", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1)
       return res.status(500).json({ success: false, error: "Database not connected" });
@@ -94,7 +118,7 @@ app.get("/api/reports", async (req, res) => {
 });
 
 // Receives push from mobile app and broadcasts via Socket.IO + web push
-app.post("/api/notify-emergency", (req, res) => {
+app.post("/api/notify-emergency", protect, requireAdminOrBarangay, (req, res) => {
   const report = req.body;
   io.emit("new_emergency_report", {
     id: report.reportId,
@@ -125,7 +149,7 @@ app.post("/api/notify-emergency", (req, res) => {
 });
 
 // Update report status
-app.post("/api/reports/update-status", async (req, res) => {
+app.post("/api/reports/update-status", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { reportId, status, adminNotes, adminEmail } = req.body;
 
@@ -166,28 +190,27 @@ app.post("/api/reports/update-status", async (req, res) => {
       io.emit("report_status_updated", { reportId, status });
 
       if (status === "approved" && report) {
-        const severityMap = { high: "critical", medium: "warning", low: "advisory" };
+        const severityMap = { high: "critical", medium: "warning", low: "watch" };
         const alertSeverity = severityMap[report.severity?.toLowerCase()] || "warning";
         const typeName = report.emergencyType?.charAt(0).toUpperCase() + report.emergencyType?.slice(1) || "Emergency";
-        const alertDoc = {
-          type: report.emergencyType || "emergency",
+        const VALID_TYPES = ["fire","flood","rainfall","earthquake","lahar","typhoon","storm","landslide","rescue","other"];
+        const alertType = VALID_TYPES.includes(report.emergencyType) ? report.emergencyType : "other";
+        const savedAlert = await Alert.create({
+          type: alertType,
           title: `Community Report: ${typeName}`,
-          message: report.description || "Emergency report approved by CDRRMO",
+          description: report.description || "Emergency report approved by CDRRMO",
           severity: alertSeverity,
           location: report.location?.exactAddress || (typeof report.location === "string" ? report.location : "") || "Unknown location",
-          source: "community_report",
-          active: true,
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          reportId,
-        };
-        const alertResult = await mongoose.connection.db.collection("alerts").insertOne(alertDoc);
-        io.emit("new_alert", { ...alertDoc, _id: alertResult.insertedId });
+          source: "residents",
+          linkedReportId: new mongoose.Types.ObjectId(reportId),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        io.emit("new_alert", savedAlert.toObject());
 
         const isUrgent = alertSeverity === "evacuate" || alertSeverity === "critical";
         sendPushToAll({
           title: `Alert: Community Report — ${typeName}`,
-          body: `${alertDoc.location}: ${alertDoc.message.slice(0, 100)}`,
+          body: `${savedAlert.location}: ${savedAlert.description.slice(0, 100)}`,
           url: "/alerts",
           tag: `community-report-${reportId}`,
           urgent: isUrgent,
@@ -205,7 +228,7 @@ app.post("/api/reports/update-status", async (req, res) => {
 });
 
 // Resolve report
-app.post("/api/reports/resolve", async (req, res) => {
+app.post("/api/reports/resolve", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { reportId, resolvedBy, resolutionNotes } = req.body;
 

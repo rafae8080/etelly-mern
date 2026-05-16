@@ -19,3 +19,9 @@ export const requireAdmin = (req, res, next) => {
     return res.status(403).json({ message: "Admin access required" });
   next();
 };
+
+export const requireAdminOrBarangay = (req, res, next) => {
+  if (!["admin", "barangay_official"].includes(req.user.role))
+    return res.status(403).json({ message: "Insufficient permissions" });
+  next();
+};

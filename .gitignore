@@ -20,10 +20,10 @@ CRON_EXPLAINED.md
 DEPLOYMENT.md
 DOCUMENTATION.md
 MOBILE_API.md
-SYSTEM_GUIDE.md
 SYSTEM_OVERVIEW.md
 techstack.md
-
+SYSTEM_AUDIT.md
+SYSTEM_GUIDE.md
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

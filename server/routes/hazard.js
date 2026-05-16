@@ -288,7 +288,7 @@ async function fetchForecastTrack(eventId, episodeId) {
 function classifyTyphoon(windKph) {
   if (windKph >= 185) return { label: "Super Typhoon (STY)",        color: "#7c3aed", level: 5 };
   if (windKph >= 118) return { label: "Typhoon (TY)",               color: "#dc2626", level: 4 };
-  if (windKph >= 89)  return { label: "Severe Tropical Storm (STS)",color: "#f97316", level: 3 };
+  if (windKph >= 87)  return { label: "Severe Tropical Storm (STS)",color: "#f97316", level: 3 };
   if (windKph >= 62)  return { label: "Tropical Storm (TS)",        color: "#f59e0b", level: 2 };
   return                     { label: "Tropical Depression (TD)",   color: "#3b82f6", level: 1 };
 }
@@ -297,7 +297,7 @@ function estimateWindRadius(windKph) {
   if (windKph >= 220) return 150;
   if (windKph >= 185) return 130;
   if (windKph >= 118) return 100;
-  if (windKph >= 89)  return  75;
+  if (windKph >= 87)  return  75;
   if (windKph >= 62)  return  55;
   return 40;
 }
