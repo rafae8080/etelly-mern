@@ -7,7 +7,7 @@ const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 
 const TABS = [
   { key: "pending",  label: "Pending" },
-  { key: "approved", label: "Approved" },
+  { key: "ongoing",  label: "Ongoing" },
   { key: "resolved", label: "Resolved" },
   { key: "rejected", label: "Rejected" },
 ];
