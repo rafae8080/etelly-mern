@@ -54,7 +54,7 @@ router.post("/fcm-subscribe", protect, async (req, res) => {
     }
     await FcmToken.findOneAndUpdate(
       { token },
-      { token, userId: req.user._id, platform, updatedAt: new Date() },
+      { token, userId: req.user.id, platform, updatedAt: new Date() },
       { upsert: true, new: true },
     );
     res.json({ success: true });

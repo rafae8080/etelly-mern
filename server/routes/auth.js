@@ -1,8 +1,11 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
+import admin from "firebase-admin";
 import User from "../models/user.js";
 import { protect } from "../middleware/auth.js";
+import { initFirebase } from "../services/fcm.js";
 
 const router = express.Router();
 
@@ -112,6 +115,63 @@ router.post("/change-password", protect, async (req, res) => {
     });
     res.json({ message: "Password changed successfully" });
   } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// POST /api/auth/google — Firebase ID token exchange for Google Sign-In.
+// Mobile sends the Firebase ID token obtained after Google Sign-In.
+// Backend verifies it, creates the user if first-time login, returns a backend JWT.
+router.post("/google", async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) {
+    return res.status(400).json({ message: "idToken is required" });
+  }
+
+  try {
+    initFirebase();
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const { email, name } = decoded;
+
+    if (!email) {
+      return res.status(400).json({ message: "Google account has no email address" });
+    }
+
+    const normalizedEmail = email.toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      // First-time Google login — create account with a random placeholder password.
+      // Google users never use email/password login so this value is never compared.
+      user = await User.create({
+        name:     name || normalizedEmail.split("@")[0],
+        email:    normalizedEmail,
+        password: randomBytes(32).toString("hex"),
+        role:     "user",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id, name: user.name, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" },
+    );
+
+    res.json({
+      token,
+      user: {
+        id:                 user._id,
+        name:               user.name,
+        email:              user.email,
+        role:               user.role,
+        mustChangePassword: user.mustChangePassword ?? false,
+      },
+    });
+  } catch (err) {
+    console.error("[Auth] Google verify failed:", err.message);
+    if (err.code?.startsWith("auth/")) {
+      return res.status(401).json({ message: "Invalid or expired Google token" });
+    }
     res.status(500).json({ message: "Server error" });
   }
 });

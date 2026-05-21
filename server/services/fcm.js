@@ -1,21 +1,29 @@
 import admin from "firebase-admin";
+import { readFileSync, existsSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import FcmToken from "../models/FcmToken.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// Absolute path to the service account file — works regardless of cwd
+const SERVICE_ACCOUNT_PATH = join(__dirname, "../config/firebase-service-account.json");
 
 let initialized = false;
 
-function initFirebase() {
+export function initFirebase() {
   if (initialized) return;
   initialized = true;
 
-  // Heroku: service account JSON stored as base64 env var
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    // Heroku: service account JSON stored as base64 env var
     const serviceAccount = JSON.parse(
       Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, "base64").toString("utf8"),
     );
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   } else {
-    // Local dev: GOOGLE_APPLICATION_CREDENTIALS path is read automatically
-    admin.initializeApp({ credential: admin.credential.applicationDefault() });
+    // Local dev: read JSON file using absolute path derived from this file's location
+    const serviceAccount = JSON.parse(readFileSync(SERVICE_ACCOUNT_PATH, "utf8"));
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   }
 }
 
@@ -65,7 +73,7 @@ function buildMulticastMessage(payload, tokens) {
 }
 
 export async function sendFCMToAll(payload) {
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !existsSync(SERVICE_ACCOUNT_PATH)) {
     console.log("[FCM] No Firebase credentials configured — skipping");
     return;
   }
