@@ -7,7 +7,7 @@ import Alert            from "../models/Alert.js";
 import User             from "../models/user.js";
 import { protect, requireAdminOrBarangay } from "../middleware/auth.js";
 import { pushItemAlert } from "../services/inventoryAlerts.js";
-import { sendPushToAll } from "./push.js";
+import { sendAdminNotification } from "./push.js";
 
 const DONATION_CATEGORY_MAP = {
   food:     "Food & Water",
@@ -129,7 +129,7 @@ router.post("/requests", async (req, res) => {
       reason: reason || "",
     });
 
-    sendPushToAll({
+    sendAdminNotification({
       title: `New Resource Request — ${category}`,
       body: `${requesterName} from ${barangay} is requesting ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
       url: "/community",
@@ -247,7 +247,7 @@ router.post("/donations", async (req, res) => {
       unit: unit || "pcs",
     });
 
-    sendPushToAll({
+    sendAdminNotification({
       title: `New Donation Offer — ${category}`,
       body: `${donorName} from ${barangay} is offering ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
       url: "/community",

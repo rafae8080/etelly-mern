@@ -69,7 +69,7 @@ export async function runEarthquakeCheck() {
         `${mag >= 5.5 ? " Drop, cover, and hold on. Check for structural damage after shaking stops." : ""}`;
 
       await Alert.create({
-        source: "PHIVOLCS",
+        source: "USGS",
         type: "earthquake",
         severity,
         title,

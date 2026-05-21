@@ -1,5 +1,5 @@
 import InventoryItem from "../models/InventoryItem.js";
-import { sendPushToAll } from "../routes/push.js";
+import { sendAdminNotification } from "../routes/push.js";
 
 const BARANGAY_LABELS = {
   bagongnayon:  "Brgy. Bagong Nayon",
@@ -49,7 +49,7 @@ export async function pushItemAlert(item) {
     lowstock:   `"${item.name}" is low on stock`,
   };
 
-  await sendPushToAll({
+  await sendAdminNotification({
     title: `📦 Inventory Alert — ${brgyLabel}`,
     body:  messages[status],
     url:   "/resources",
@@ -83,7 +83,7 @@ export async function runInventoryAlertCheck() {
       const total     = Object.values(counts).reduce((a, b) => a + b, 0);
       const brgyLabel = BARANGAY_LABELS[brgy] ?? brgy;
 
-      await sendPushToAll({
+      await sendAdminNotification({
         title: `📦 Daily Inventory Report — ${brgyLabel}`,
         body:  `${total} item${total !== 1 ? "s" : ""} need attention: ${parts.join(", ")}`,
         url:   "/resources",

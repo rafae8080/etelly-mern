@@ -15,15 +15,16 @@ client\.env.production
 
 .claude/
 CLAUDE.md
+SYSTEM_GUIDE.md
+MOBILE_FCM_GUIDE.md
+MOBILE_API.md
 HEROKU_GUIDE.md
 CRON_EXPLAINED.md
 DEPLOYMENT.md
 DOCUMENTATION.md
-MOBILE_API.md
 SYSTEM_OVERVIEW.md
 techstack.md
 SYSTEM_AUDIT.md
-SYSTEM_GUIDE.md
 
 # Editor directories and files
 .vscode/*
@@ -38,3 +39,4 @@ SYSTEM_GUIDE.md
 
 server\.env
 .env
+server/config/firebase-service-account.json

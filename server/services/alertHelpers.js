@@ -1,5 +1,5 @@
 import Alert from "../models/Alert.js";
-import { sendPushToAll } from "../routes/push.js";
+import { sendNotificationToAll } from "../routes/push.js";
 
 export function toDateKey() {
   const d = new Date();
@@ -48,7 +48,7 @@ export async function upsertSystemAlert(data) {
 
   if (isNew) {
     const prefix = SEVERITY_PREFIX[data.severity] ?? "⚠️ Alert";
-    sendPushToAll({
+    sendNotificationToAll({
       title:  `${prefix}: ${data.title}`,
       body:   data.description.slice(0, 100),
       url:    "/alerts",

@@ -82,12 +82,6 @@ export const SOURCE_CONFIG = {
     text: "text-sky-700",
     border: "border-sky-200",
   },
-  PHIVOLCS: {
-    label: "PHIVOLCS / USGS",
-    bg: "bg-purple-50",
-    text: "text-purple-700",
-    border: "border-purple-200",
-  },
   NDRRMC: {
     label: "NDRRMC",
     bg: "bg-red-50",

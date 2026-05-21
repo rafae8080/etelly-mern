@@ -108,11 +108,13 @@ export default function RequestsView({ requests, loading, onRefresh }) {
                         {req.quantity} {req.unit}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        <div>{req.requesterName}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">{req.barangay}</div>
+                        {req.requesterName}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-[180px]">
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-[200px]">
                         <span className="block truncate">{req.address}</span>
+                        {req.barangay && (
+                          <span className="block text-xs text-gray-400 mt-0.5 truncate">{req.barangay}</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{date}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{time}</td>

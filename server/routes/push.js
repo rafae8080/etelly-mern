@@ -1,7 +1,9 @@
 import express from "express";
 import webpush from "web-push";
 import PushSubscription from "../models/PushSubscription.js";
+import FcmToken from "../models/FcmToken.js";
 import { protect } from "../middleware/auth.js";
+import { sendFCMToAll } from "../services/fcm.js";
 
 const router = express.Router();
 
@@ -42,6 +44,38 @@ router.delete("/unsubscribe", protect, async (req, res) => {
     res.status(500).json({ error: "Failed to remove subscription" });
   }
 });
+
+// POST /api/push/fcm-subscribe — register a Flutter FCM device token
+router.post("/fcm-subscribe", protect, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token || !["android", "ios"].includes(platform)) {
+      return res.status(400).json({ error: "token and platform (android|ios) are required" });
+    }
+    await FcmToken.findOneAndUpdate(
+      { token },
+      { token, userId: req.user._id, platform, updatedAt: new Date() },
+      { upsert: true, new: true },
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[FCM] Subscribe error:", err.message);
+    res.status(500).json({ error: "Failed to save FCM token" });
+  }
+});
+
+// DELETE /api/push/fcm-unsubscribe — remove a Flutter FCM device token on logout
+router.delete("/fcm-unsubscribe", protect, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "token is required" });
+    await FcmToken.deleteOne({ token });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[FCM] Unsubscribe error:", err.message);
+    res.status(500).json({ error: "Failed to remove FCM token" });
+  }
+});
 // Send a push notification to every stored subscription
 export async function sendPushToAll(payload) {
   initVapid();
@@ -67,6 +101,28 @@ export async function sendPushToAll(payload) {
         }),
     ),
   );
+}
+
+// Unified sender — VAPID (web admins) + FCM (mobile residents).
+// Use for hazard alerts and official CDRRMO announcements.
+export async function sendNotificationToAll(payload) {
+  const [vapidResult, fcmResult] = await Promise.allSettled([
+    sendPushToAll(payload),
+    sendFCMToAll(payload),
+  ]);
+  if (vapidResult.status === "rejected") {
+    console.error("[Notify] VAPID channel failed:", vapidResult.reason?.message);
+  }
+  if (fcmResult.status === "rejected") {
+    console.error("[Notify] FCM channel failed:", fcmResult.reason?.message);
+  }
+}
+
+// Admin-only sender — VAPID only, no FCM.
+// Use for pending reports, resource requests, donations, and inventory alerts
+// that are operational tasks for CDRRMO — residents do not need to see these.
+export async function sendAdminNotification(payload) {
+  await sendPushToAll(payload);
 }
 
 export default router;

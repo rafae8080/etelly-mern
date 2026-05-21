@@ -13,7 +13,7 @@ import alertRoutes from "./routes/alerts.js";
 import reportRoutes from "./routes/reports.js";
 import evacuationRoutes from "./routes/evacuation.js";
 import communityRoutes from "./routes/community.js";
-import pushRoutes, { sendPushToAll } from "./routes/push.js";
+import pushRoutes, { sendNotificationToAll, sendAdminNotification } from "./routes/push.js";
 import inventoryRoutes from "./routes/inventory.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 import Alert from "./models/Alert.js";
@@ -137,7 +137,7 @@ app.post("/api/notify-emergency", protect, requireAdminOrBarangay, (req, res) =>
   const emergencyType = report.emergencyType || "Emergency";
   const severity = report.severity ? ` (${report.severity})` : "";
   const locationLabel = report.barangay || report.location || "Unknown location";
-  sendPushToAll({
+  sendAdminNotification({
     title: `New Report: ${emergencyType}${severity}`,
     body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
     url: "/reports",
@@ -208,7 +208,7 @@ app.post("/api/reports/update-status", protect, requireAdminOrBarangay, async (r
         io.emit("new_alert", savedAlert.toObject());
 
         const isUrgent = alertSeverity === "evacuate" || alertSeverity === "critical";
-        sendPushToAll({
+        sendNotificationToAll({
           title: `Alert: Community Report — ${typeName}`,
           body: `${savedAlert.location}: ${savedAlert.description.slice(0, 100)}`,
           url: "/alerts",
@@ -311,7 +311,7 @@ mongoose
           (typeof doc.location === "string" ? doc.location : "") ||
           "Unknown location";
 
-        sendPushToAll({
+        sendAdminNotification({
           title: `New Report: ${emergencyType}${severity}`,
           body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
           url: "/reports",

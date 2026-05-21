@@ -3,7 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Alert from "../models/Alert.js";
 import { protect } from "../middleware/auth.js";
-import { sendPushToAll } from "./push.js";
+import { sendNotificationToAll } from "./push.js";
 
 const router = express.Router();
 
@@ -85,13 +85,13 @@ router.post("/", protect, async (req, res) => {
     io?.emit("new_alert", alert.toObject());
 
     const isRescue = type === "rescue";
-    sendPushToAll({
+    sendNotificationToAll({
       title: isRescue ? "🚨 Rescue Alert" : `⚠️ ${title}`,
       body:  description,
       url:   "/alerts",
       tag:   `alert-${alert._id}`,
       urgent: isRescue,
-    }).catch((err) => console.error("[Push] sendPushToAll failed:", err));
+    }).catch((err) => console.error("[Push] sendNotificationToAll failed:", err));
 
     if (isManual) {
       const db = mongoose.connection.db;
