@@ -2,6 +2,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { ObjectId } from "mongodb";
+import { sendAdminNotification } from "./push.js";
 
 const router = express.Router();
 
@@ -75,8 +76,12 @@ router.post("/create", async (req, res) => {
     const {
       emergencyType, severity, description, location,
       latitude, longitude, userName, phoneNumber, images, barangay,
-      source, offlineSubmittedAt,
+      source, offlineSubmittedAt, reportId,
     } = req.body;
+
+    if (!emergencyType || !severity) {
+      return res.status(400).json({ success: false, error: "Missing required fields: emergencyType, severity" });
+    }
 
     const reportData = {
       emergencyType, severity, description, location,
@@ -87,7 +92,8 @@ router.post("/create", async (req, res) => {
       status: "pending",
       source: source || "online",
       offlineSubmittedAt: offlineSubmittedAt ? new Date(offlineSubmittedAt) : null,
-      syncedToCloud: false,
+      syncedToCloud: process.env.LOCAL_MODE === 'true' ? false : true,
+      ...(reportId && { reportId }),
     };
 
     const result = await reportsCollection.insertOne(reportData);
@@ -100,6 +106,20 @@ router.post("/create", async (req, res) => {
         ...reportData,
       });
     }
+
+    // Push notification — works even on standalone local MongoDB (no change stream needed)
+    const locationLabel =
+      (typeof location === "string" ? location : location?.barangay || location?.address || "") ||
+      barangay ||
+      "Unknown location";
+    const severityLabel = severity ? ` (${severity})` : "";
+    sendAdminNotification({
+      title: `New Report: ${emergencyType || "Emergency"}${severityLabel}`,
+      body: `A new pending report was submitted from ${locationLabel}. Tap to review.`,
+      url: "/reports",
+      tag: `report-${result.insertedId}`,
+      urgent: true,
+    }).catch((err) => console.error("[Push] Report notification failed:", err));
 
     res.json({
       success: true,

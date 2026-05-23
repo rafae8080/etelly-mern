@@ -1,7 +1,7 @@
 import ReportTile from "../components/admin/ReportTile";
 import { useState, useEffect, useRef } from "react";
 import { connectSocket } from "../utils/socket";
-import { TrendingUp, Search } from "lucide-react";
+import { TrendingUp, Search, Download } from "lucide-react";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 const IS_LOCAL_MODE = import.meta.env?.VITE_LOCAL_MODE === "true";
@@ -31,6 +31,7 @@ export default function ReportsPage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(null);
   const hasLoaded = useRef(false);
 
   const showToast = (msg, type = "success") => {
@@ -38,20 +39,37 @@ export default function ReportsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const fetchSyncStatus = async () => {
+    if (!IS_LOCAL_MODE) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/sync/status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
+      });
+      if (res.ok) setSyncStatus(await res.json());
+    } catch {}
+  };
+
+  const handleExport = () => {
+    window.open(`${API_BASE}/api/sync/export`, "_blank");
+  };
+
   useEffect(() => {
     fetchReports();
+    fetchSyncStatus();
 
     const socket = connectSocket();
-    socket.on("new_emergency_report", () => fetchReports());
+    socket.on("new_emergency_report", () => { fetchReports(); fetchSyncStatus(); });
     socket.on("report_updated", () => fetchReports());
 
     // Fallback poll — catches updates if the socket event is missed
     const poll = setInterval(fetchReports, 30_000);
+    const syncPoll = IS_LOCAL_MODE ? setInterval(fetchSyncStatus, 30_000) : null;
 
     return () => {
       socket.off("new_emergency_report");
       socket.off("report_updated");
       clearInterval(poll);
+      if (syncPoll) clearInterval(syncPoll);
     };
   }, []);
 
@@ -233,9 +251,33 @@ export default function ReportsPage() {
   return (
     <div className="p-3 sm:p-6">
       {IS_LOCAL_MODE && (
-        <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
-          <strong>Local Mode Active</strong> — Reports are stored on this device.
-          They will sync to CDRRMO when internet is restored.
+        <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4 text-sm text-amber-800">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <strong>Local Mode Active</strong> — Reports are stored on this device.
+              They will sync to CDRRMO when internet is restored.
+              {syncStatus && (
+                <span className="ml-2">
+                  {syncStatus.unsyncedCount > 0
+                    ? <span className="font-semibold text-amber-900">· {syncStatus.unsyncedCount} pending sync</span>
+                    : <span className="text-green-700">· All synced</span>}
+                  {syncStatus.lastSyncAt && (
+                    <span className="text-amber-600 ml-1">
+                      · Last sync: {new Date(syncStatus.lastSyncAt).toLocaleTimeString()}
+                      {syncStatus.lastSyncResult === "failed" && <span className="text-red-600 ml-1">(failed)</span>}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 text-white text-xs font-semibold rounded-lg hover:bg-amber-800 transition-colors"
+            >
+              <Download size={13} />
+              Save Offline Reports
+            </button>
+          </div>
         </div>
       )}
 

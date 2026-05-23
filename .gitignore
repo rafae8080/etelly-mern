@@ -31,7 +31,7 @@ DOCUMENTATION.md
 SYSTEM_OVERVIEW.md
 techstack.md
 SYSTEM_AUDIT.md
-
+OFFLINE_IMPLEMENTATION.md
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -43,7 +43,6 @@ SYSTEM_AUDIT.md
 *.sln
 *.sw?
 
-OFFLINE_IMPLEMENTATION.md
 CLAUDE.md
 
 .claude
