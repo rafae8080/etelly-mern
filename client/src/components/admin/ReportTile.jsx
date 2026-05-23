@@ -3,6 +3,7 @@ import {
   X,
   Droplets, Flame, Activity, Mountain, Heart, LifeBuoy, FileText,
 } from "lucide-react";
+import ModalShell from "../ui/ModalShell";
 
 export default function ReportTile({
   id,
@@ -172,8 +173,7 @@ export default function ReportTile({
 
       {/* Detail Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
+        <ModalShell onClose={() => setIsModalOpen(false)} size="xl">
             {/* Modal Header */}
             <div className="flex items-start justify-between p-6 border-b border-gray-200">
               <div>
@@ -363,8 +363,7 @@ export default function ReportTile({
                 )}
               </div>
             )}
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );

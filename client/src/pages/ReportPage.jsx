@@ -255,7 +255,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
         <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
           <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Reports</p>
           <p className="text-2xl sm:text-3xl font-bold text-gray-900">{totalReports}</p>
@@ -272,7 +272,7 @@ export default function ReportsPage() {
           <p className="text-2xl sm:text-3xl font-bold text-red-600">{highPriorityCount}</p>
         </div>
 
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 col-span-2 md:col-span-1">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
           <p className="text-xs sm:text-sm text-gray-600 mb-1">Rescue Needed</p>
           <p className="text-2xl sm:text-3xl font-bold text-orange-600">{rescueNeededCount}</p>
         </div>

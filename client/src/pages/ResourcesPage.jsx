@@ -3,6 +3,7 @@ import {
   Package, Plus, SquarePen, Search, X, CircleAlert,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ChevronUp, Loader2, Trash2,
 } from "lucide-react";
+import ModalShell from "../components/ui/ModalShell";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BARANGAYS = [
@@ -172,8 +173,8 @@ function ItemModal({ item, onClose, onSave, onDelete }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+    <ModalShell onClose={onClose} size="md">
+      <div className="p-6">
 
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-bold text-gray-900">
@@ -289,7 +290,7 @@ function ItemModal({ item, onClose, onSave, onDelete }) {
           </div>
         )}
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

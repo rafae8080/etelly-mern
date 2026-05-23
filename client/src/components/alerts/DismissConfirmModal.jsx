@@ -1,12 +1,9 @@
 import { X } from "lucide-react";
+import ModalShell from "../ui/ModalShell";
 
 export default function DismissConfirmModal({ alert, onConfirm, onCancel }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onCancel()}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 border border-gray-100">
+    <ModalShell onClose={onCancel} size="sm">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-900">Dismiss Alert</h2>
@@ -44,7 +41,6 @@ export default function DismissConfirmModal({ alert, onConfirm, onCancel }) {
             Dismiss
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

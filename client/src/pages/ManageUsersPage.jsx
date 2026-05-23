@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Pencil, Trash2, UserCog, Copy, KeyRound, ChevronLeft, ChevronRight, ListFilter } from "lucide-react";
+import ModalShell from "../components/ui/ModalShell";
 
 const API_BASE  = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
 const PAGE_SIZE = 7;
@@ -41,6 +42,7 @@ export default function ManageUsersPage() {
   const [resetResult,     setResetResult]     = useState(null);
   const [filterOpen,      setFilterOpen]      = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
 
   const filterRef = useRef(null);
 
@@ -139,6 +141,16 @@ export default function ManageUsersPage() {
   const menuUser       = menuState ? users.find(u => u._id === menuState.userId) : null;
   const isResidentMenu = menuUser?.role === "user";
 
+  // ── Password validation ─────────────────────────────────────────────────────
+  const pwRules = [
+    { label: "At least 8 characters",       test: (p) => p.length >= 8 },
+    { label: "One uppercase letter (A–Z)",  test: (p) => /[A-Z]/.test(p) },
+    { label: "One lowercase letter (a–z)",  test: (p) => /[a-z]/.test(p) },
+    { label: "One number (0–9)",            test: (p) => /[0-9]/.test(p) },
+    { label: "One special character",       test: (p) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p) },
+  ];
+  const isPasswordValid = (p) => pwRules.every(r => r.test(p));
+
   // ── Password ────────────────────────────────────────────────────────────────
   const generatePassword = () => {
     const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -194,6 +206,7 @@ export default function ManageUsersPage() {
     setSelectedUser(null);
     setGeneratedPassword("");
     setShowPassword(false);
+    setPasswordTouched(false);
     setFormData({ email: "", firstName: "", lastName: "", role: "barangay_official", password: "" });
     setIsModalOpen(true);
   };
@@ -214,6 +227,10 @@ export default function ManageUsersPage() {
   // ── CRUD ────────────────────────────────────────────────────────────────────
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    if (!isPasswordValid(formData.password)) {
+      setPasswordTouched(true);
+      return;
+    }
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -564,8 +581,7 @@ export default function ManageUsersPage() {
 
       {/* ── Create / Edit modal ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md relative">
+        <ModalShell onClose={() => setIsModalOpen(false)} size="md">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                 {isEditMode ? "Edit User" : "Create New User"}
@@ -577,7 +593,7 @@ export default function ManageUsersPage() {
 
             <form onSubmit={isEditMode ? handleUpdateUser : handleCreateUser} className="p-6">
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
                     <input
@@ -632,9 +648,15 @@ export default function ManageUsersPage() {
                       <input
                         type={showPassword ? "text" : "password"}
                         value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 font-mono text-sm"
-                        required minLength={6} disabled={isLoading} placeholder="Min 6 characters"
+                        onChange={(e) => {
+                          setFormData({ ...formData, password: e.target.value });
+                          setPasswordTouched(true);
+                        }}
+                        className={`flex-1 px-4 py-2 bg-gray-50 border rounded-lg focus:outline-none focus:ring-2 font-mono text-sm
+                          ${passwordTouched && !isPasswordValid(formData.password)
+                            ? "border-red-400 focus:ring-red-300"
+                            : "border-gray-200 focus:ring-blue-300"}`}
+                        required disabled={isLoading} placeholder="Min 8 characters"
                       />
                       <button type="button" onClick={copyPassword}
                         className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Copy password">
@@ -645,6 +667,22 @@ export default function ManageUsersPage() {
                         Generate
                       </button>
                     </div>
+                    {(passwordTouched || formData.password) && (
+                      <ul className="mt-2 space-y-1">
+                        {pwRules.map((rule) => {
+                          const passed = rule.test(formData.password);
+                          return (
+                            <li key={rule.label} className={`flex items-center gap-1.5 text-xs ${passed ? "text-green-600" : "text-gray-400"}`}>
+                              <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0
+                                ${passed ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
+                                {passed ? "✓" : "·"}
+                              </span>
+                              {rule.label}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>
@@ -662,14 +700,13 @@ export default function ManageUsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* ── Reset password result ── */}
       {resetResult && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
+        <ModalShell onClose={() => setResetResult(null)} size="sm">
+          <div className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
                 <KeyRound size={18} className="text-amber-600" />
@@ -696,13 +733,13 @@ export default function ManageUsersPage() {
               Done
             </button>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* ── Delete confirmation ── */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
+        <ModalShell onClose={() => { setShowDeleteConfirm(false); setUserToDelete(null); }} size="sm">
+          <div className="p-6">
             <h3 className="text-lg font-semibold mb-2">Confirm Delete</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete this user? This action cannot be undone.
@@ -722,7 +759,7 @@ export default function ManageUsersPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

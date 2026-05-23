@@ -6,6 +6,7 @@ import {
   Activity,
   MapPin,
   FileWarning,
+  X,
 } from "lucide-react";
 
 // ── Legend definitions ────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ const ALL_LEGENDS = [
 export default function HazardLegend({ activeLayers }) {
   const active = ALL_LEGENDS.filter((l) => activeLayers[l.key]);
   const [selectedKey, setSelectedKey] = useState(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const activeKeyString = active.map((l) => l.key).join(",");
   useEffect(() => {
@@ -126,13 +128,22 @@ export default function HazardLegend({ activeLayers }) {
   const selected = active.find((l) => l.key === selectedKey) ?? active[0];
 
   return (
-    <div
-      className="absolute bottom-6 left-3 z-[1000] pointer-events-auto"
-      style={{ width: 224 }}
-    >
-      {/* Fixed-height box — tabs + scrollable content */}
+    <div className="absolute bottom-6 left-3 z-[1000] pointer-events-auto" style={{ width: 224 }}>
+      {/* Mobile collapsed pill — hidden on sm+ (always expanded there) */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="sm:hidden bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md px-3 py-2 flex items-center gap-2"
+        >
+          <selected.Icon size={14} strokeWidth={2} className={selected.iconColor} />
+          <span className="text-[11px] font-semibold text-gray-700">Legend</span>
+        </button>
+      )}
+
+      {/* Full legend — toggleable on mobile, always visible on sm+ */}
       <div
-        className="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md overflow-hidden flex flex-col"
+        className={`bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-md overflow-hidden flex-col
+                    ${isOpen ? "flex" : "hidden"} sm:flex`}
         style={{ height: 160 }}
       >
         {/* Tab row */}
@@ -162,11 +173,19 @@ export default function HazardLegend({ activeLayers }) {
               </button>
             );
           })}
+
+          {/* Close button — mobile only */}
+          <button
+            onClick={() => setIsOpen(false)}
+            title="Close legend"
+            className="sm:hidden flex items-center justify-center px-2 border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+          >
+            <X size={12} />
+          </button>
         </div>
 
         {/* Scrollable legend body */}
         <div className="flex-1 overflow-y-auto px-3 py-2.5">
-          {/* Layer header */}
           <div className="flex items-center gap-1.5 mb-1">
             <selected.Icon
               size={11}
@@ -184,20 +203,19 @@ export default function HazardLegend({ activeLayers }) {
             </p>
           )}
 
-
-            <div className="flex flex-col gap-1">
-              {selected.rows.map((row) => (
-                <div key={row.label} className="flex items-center gap-1.5">
-                  <span
-                    className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ backgroundColor: row.color }}
-                  />
-                  <span className="text-[10px] text-gray-600 leading-snug">
-                    {row.label}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div className="flex flex-col gap-1">
+            {selected.rows.map((row) => (
+              <div key={row.label} className="flex items-center gap-1.5">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: row.color }}
+                />
+                <span className="text-[10px] text-gray-600 leading-snug">
+                  {row.label}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

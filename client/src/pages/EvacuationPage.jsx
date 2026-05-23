@@ -3,6 +3,7 @@ import {
   Settings, Users, X, Check, RotateCcw,
   ChevronDown, ClipboardList, ChevronUp, Loader2, Plus, Phone,
 } from "lucide-react";
+import ModalShell from "../components/ui/ModalShell";
 import { connectSocket } from "../utils/socket";
 import buildingImg from "../images/building.png";
 import LocationPicker from "../components/alerts/LocationPicker/LocationPicker";
@@ -122,8 +123,8 @@ function EditModal({ center, onClose, onSaveCapacity, onReset, onToggleAvailabil
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+    <ModalShell onClose={onClose} size="sm">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-base font-bold text-gray-900">Edit Facility</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -172,7 +173,7 @@ function EditModal({ center, onClose, onSaveCapacity, onReset, onToggleAvailabil
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -202,8 +203,8 @@ function CreateModal({ currentBarangay, onClose, onCreate }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+    <ModalShell onClose={onClose} size="md">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-gray-900">Add Evacuation Center</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -250,7 +251,7 @@ function CreateModal({ currentBarangay, onClose, onCreate }) {
           {saving ? "Adding…" : "Add Center"}
         </button>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -442,19 +443,21 @@ export default function EvacuationPage() {
           <p className="text-sm text-gray-500 mt-1">Antipolo City — {brgyLabel}</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
           {isAdmin && (
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors"
-            >
-              <Plus size={14} />
-              Add Center
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors"
+              >
+                <Plus size={14} />
+                Add Center
+              </button>
+            </div>
           )}
 
           {/* Barangay selector */}
-          <div className="shrink-0">
+          <div className="relative">
             <button
               ref={brgyBtnRef}
               onClick={() => setBrgyOpen((o) => !o)}
@@ -475,7 +478,7 @@ export default function EvacuationPage() {
                       top:      rect ? rect.bottom + 4 : 0,
                       right:    rect ? window.innerWidth - rect.right : 0,
                       minWidth: rect ? rect.width : 160,
-                      maxWidth: 220,
+                      maxWidth: 240,
                     }}
                   >
                     {BARANGAYS.map((b) => (

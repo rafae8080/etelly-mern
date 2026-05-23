@@ -12,7 +12,8 @@ const timeAgo = (ts) => {
 const OfflineBanner = ({ cachedAt, onRefresh }) => {
   return (
     <div
-      className="absolute top-[70px] left-[60px] right-[220px] z-[1050]
+      className="absolute top-[70px] left-2 right-2 z-[1050]
+                    sm:left-[60px] sm:right-[220px]
                     bg-amber-50 border border-amber-300 rounded-xl
                     px-3 py-2 flex items-center gap-2 shadow-sm"
     >

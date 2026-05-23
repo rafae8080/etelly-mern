@@ -134,18 +134,37 @@ export default function AlertsPage() {
       )}
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total",    value: counts.total,           color: "text-gray-900"  },
-          { label: "Rescue",   value: counts.rescue   ?? 0,   color: "text-red-600"   },
-          { label: "Evacuate", value: counts.evacuate ?? 0,   color: "text-red-700"   },
-          { label: "Critical", value: counts.critical ?? 0,   color: "text-red-500"   },
-          { label: "Warning",  value: counts.warning  ?? 0,   color: "text-amber-600" },
-          { label: "Watch",    value: counts.watch    ?? 0,   color: "text-blue-600"  },
+          {
+            label: "Active Alerts",
+            value: counts.total,
+            color: "text-gray-900",
+            sub: "currently active",
+          },
+          {
+            label: "Rescue Needed",
+            value: counts.rescue ?? 0,
+            color: "text-red-600",
+            sub: "life-threatening",
+          },
+          {
+            label: "Immediate Action",
+            value: (counts.evacuate ?? 0) + (counts.critical ?? 0),
+            color: "text-orange-600",
+            sub: "evacuate + critical",
+          },
+          {
+            label: "Monitoring",
+            value: (counts.warning ?? 0) + (counts.watch ?? 0),
+            color: "text-blue-600",
+            sub: "warning + watch",
+          },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
             <p className="text-xs text-gray-400 font-medium">{s.label}</p>
             <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{s.sub}</p>
           </div>
         ))}
       </div>

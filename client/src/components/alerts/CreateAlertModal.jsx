@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
+import ModalShell from "../ui/ModalShell";
 import { SEVERITY_CONFIG } from "../../hooks/useAlerts";
 import LocationPicker from "./LocationPicker/LocationPicker";
 
@@ -84,11 +85,7 @@ export default function CreateAlertModal({ onClose, onCreated }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-gray-100 overflow-hidden max-h-[92vh] flex flex-col">
+    <ModalShell onClose={onClose} size="lg" flex>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-semibold text-gray-900">
@@ -265,7 +262,6 @@ export default function CreateAlertModal({ onClose, onCreated }) {
             {submitting ? "Creating…" : "Create Alert"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

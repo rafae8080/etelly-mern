@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
+import ModalShell from "../ui/ModalShell";
 import { API_BASE, authHeaders, formatDate, getStatusColor, getStatusDotColor } from "./helpers";
 import LogModal from "./LogModal";
 
@@ -45,11 +46,7 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
   const lastEntry  = req.actionLog?.[req.actionLog.length - 1];
 
   return (
-    <div
-      className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
+    <ModalShell onClose={onClose} size="xl">
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-bold text-gray-900 capitalize">{req.category} Request</h2>
@@ -216,7 +213,6 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

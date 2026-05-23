@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import ModalShell from "../ui/ModalShell";
 import { formatDate } from "./helpers";
 
 export default function LogModal({ item, onClose }) {
@@ -6,11 +7,7 @@ export default function LogModal({ item, onClose }) {
   const isRequest = "requesterName" in item;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+    <ModalShell onClose={onClose} size="md" flex>
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Action Log</h2>
@@ -75,7 +72,6 @@ export default function LogModal({ item, onClose }) {
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
