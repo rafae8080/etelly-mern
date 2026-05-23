@@ -17,7 +17,7 @@ import pushRoutes, { sendNotificationToAll, sendAdminNotification } from "./rout
 import inventoryRoutes from "./routes/inventory.js";
 import syncRoutes from "./routes/sync.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
-import { syncReports } from "./scripts/syncToCloud.js";
+import { syncReports, startSyncScheduler } from "./scripts/syncToCloud.js";
 import Alert from "./models/Alert.js";
 import { protect, requireAdmin, requireAdminOrBarangay } from "./middleware/auth.js";
 import rateLimit from "express-rate-limit";
@@ -184,6 +184,7 @@ app.post("/api/reports/update-status", protect, requireAdminOrBarangay, async (r
             adminNotes: adminNotes || "",
             reviewedBy: adminEmail || "admin",
             reviewedAt: new Date().toISOString(),
+            ...(isLocalMode && { syncedToCloud: false }),
           },
           $push: {
             logs: {
@@ -254,6 +255,7 @@ app.post("/api/reports/resolve", protect, requireAdminOrBarangay, async (req, re
             resolvedBy: resolvedBy || "admin",
             resolvedAt: new Date().toISOString(),
             resolutionNotes: resolutionNotes || "",
+            ...(isLocalMode && { syncedToCloud: false }),
           },
           $push: {
             logs: {
@@ -303,8 +305,8 @@ mongoose
       startAlertEngine();
     } else {
       console.log("[Local Mode] Alert engine skipped (no internet).");
-      console.log("[Local Mode] Sync scheduler started — checks every 5 min.");
-      setInterval(syncReports, 5 * 60 * 1000);
+      console.log("[Local Mode] Sync scheduler started — watches for internet every 30s.");
+      startSyncScheduler();
     }
 
     // Watch for new reports from any source (including Flutter direct saves)

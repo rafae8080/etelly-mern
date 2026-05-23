@@ -15,6 +15,7 @@ router.post("/receive-batch", async (req, res) => {
 
     const col = mongoose.connection.db.collection("emergency_reports");
     let inserted = 0;
+    let updated = 0;
     let skipped = 0;
 
     for (const reportData of reports) {
@@ -28,7 +29,31 @@ router.post("/receive-batch", async (req, res) => {
       });
 
       if (exists) {
-        skipped++;
+        // Update approval/resolution data so cloud reflects local barangay actions
+        const hasUpdate =
+          reportData.status !== exists.status ||
+          (reportData.logs || []).length !== (exists.logs || []).length;
+
+        if (hasUpdate) {
+          await col.updateOne(
+            { _id: exists._id },
+            {
+              $set: {
+                status: reportData.status,
+                adminNotes: reportData.adminNotes || "",
+                reviewedBy: reportData.reviewedBy || "",
+                reviewedAt: reportData.reviewedAt || null,
+                resolvedBy: reportData.resolvedBy || "",
+                resolvedAt: reportData.resolvedAt || null,
+                resolutionNotes: reportData.resolutionNotes || "",
+                logs: reportData.logs || [],
+              },
+            }
+          );
+          updated++;
+        } else {
+          skipped++;
+        }
         continue;
       }
 
@@ -50,8 +75,9 @@ router.post("/receive-batch", async (req, res) => {
     res.json({
       success: true,
       inserted,
+      updated,
       skipped,
-      message: `Sync complete: ${inserted} new, ${skipped} duplicates skipped`,
+      message: `Sync complete: ${inserted} new, ${updated} updated, ${skipped} unchanged`,
     });
   } catch (err) {
     console.error("[Sync] receive-batch error:", err);

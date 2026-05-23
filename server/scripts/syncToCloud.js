@@ -82,6 +82,23 @@ export async function syncReports() {
   }
 }
 
+export function startSyncScheduler() {
+  let wasOnline = false;
+
+  async function tick() {
+    const isOnline = await checkInternet();
+    if (isOnline && !wasOnline) {
+      console.log("[Sync] Internet restored — syncing now.");
+      syncReports();
+    }
+    wasOnline = isOnline;
+  }
+
+  // Sync immediately on startup, then watch every 30s
+  syncReports();
+  setInterval(tick, 30 * 1000);
+}
+
 // Standalone execution: node scripts/syncToCloud.js
 if (process.argv[1] === __filename) {
   const LOCAL_MONGO =
