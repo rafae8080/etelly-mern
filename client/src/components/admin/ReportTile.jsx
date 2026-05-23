@@ -17,6 +17,7 @@ export default function ReportTile({
   hasImage,
   imageUrl,
   status = "pending",
+  source = "online",
   adminNotes = null,
   resolvedBy = null,
   resolvedAt = null,
@@ -152,9 +153,16 @@ export default function ReportTile({
                 </div>
                 <p className="text-sm text-gray-600 mt-1 line-clamp-2">{description}</p>
               </div>
-              <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${severityClass}`}>
-                {severity?.toUpperCase() || "MEDIUM"}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {source && source !== "online" && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                    {source === "mesh_relay" ? "Via Mesh" : "Direct WiFi"}
+                  </span>
+                )}
+                <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${severityClass}`}>
+                  {severity?.toUpperCase() || "MEDIUM"}
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">

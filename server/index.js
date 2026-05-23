@@ -15,7 +15,9 @@ import evacuationRoutes from "./routes/evacuation.js";
 import communityRoutes from "./routes/community.js";
 import pushRoutes, { sendNotificationToAll, sendAdminNotification } from "./routes/push.js";
 import inventoryRoutes from "./routes/inventory.js";
+import syncRoutes from "./routes/sync.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
+import { syncReports } from "./scripts/syncToCloud.js";
 import Alert from "./models/Alert.js";
 import { protect, requireAdmin, requireAdminOrBarangay } from "./middleware/auth.js";
 import rateLimit from "express-rate-limit";
@@ -24,11 +26,14 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
+const isLocalMode = process.env.LOCAL_MODE === "true";
+
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
   "http://localhost:3000",
   /\.herokuapp\.com$/,
+  ...(isLocalMode ? [/^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/] : []),
 ];
 
 const corsOptions = {
@@ -86,6 +91,7 @@ app.use("/api/evacuation", evacuationRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/sync", syncRoutes);
 
 // Socket.IO
 io.on("connection", (socket) => {
@@ -95,9 +101,13 @@ io.on("connection", (socket) => {
   });
 });
 
-// Health check
+// Health check — Flutter app pings this to confirm local server is reachable
 app.get("/api/health", (req, res) => {
-  res.json({ status: "OK", message: "Server is running" });
+  res.json({
+    status: "ok",
+    mode: isLocalMode ? "LOCAL" : "CLOUD",
+    message: "Server is running",
+  });
 });
 
 // GET all reports — admin only
@@ -277,11 +287,25 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
+const mongoUri = isLocalMode
+  ? process.env.LOCAL_MONGO_URI || "mongodb://localhost:27017/etelly_local"
+  : process.env.MONGO_URI;
+
+const mongoOptions = isLocalMode ? {} : { dbName: "etelly" };
+
 mongoose
-  .connect(process.env.MONGO_URI, { dbName: "etelly" })
+  .connect(mongoUri, mongoOptions)
   .then(() => {
-    console.log("Connected to MongoDB Atlas — etelly");
-    startAlertEngine();
+    const dbLabel = isLocalMode ? "LOCAL (etelly_local)" : "Atlas (etelly)";
+    console.log(`Connected to MongoDB — ${dbLabel}`);
+
+    if (!isLocalMode) {
+      startAlertEngine();
+    } else {
+      console.log("[Local Mode] Alert engine skipped (no internet).");
+      console.log("[Local Mode] Sync scheduler started — checks every 5 min.");
+      setInterval(syncReports, 5 * 60 * 1000);
+    }
 
     // Watch for new reports from any source (including Flutter direct saves)
     try {

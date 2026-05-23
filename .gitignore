@@ -11,10 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
-client\.env.production
+# Environment files
+.env
+.env.*
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+server/config/firebase-service-account.json
 
-.claude/
-CLAUDE.md
+
 SYSTEM_GUIDE.md
 MOBILE_FCM_GUIDE.md
 MOBILE_API.md
@@ -37,6 +43,7 @@ SYSTEM_AUDIT.md
 *.sln
 *.sw?
 
-server\.env
-.env
-server/config/firebase-service-account.json
+OFFLINE_IMPLEMENTATION.md
+CLAUDE.md
+
+.claude

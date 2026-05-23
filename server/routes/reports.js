@@ -75,6 +75,7 @@ router.post("/create", async (req, res) => {
     const {
       emergencyType, severity, description, location,
       latitude, longitude, userName, phoneNumber, images, barangay,
+      source, offlineSubmittedAt,
     } = req.body;
 
     const reportData = {
@@ -84,6 +85,9 @@ router.post("/create", async (req, res) => {
       barangay: barangay || "",
       timestamp: new Date(),
       status: "pending",
+      source: source || "online",
+      offlineSubmittedAt: offlineSubmittedAt ? new Date(offlineSubmittedAt) : null,
+      syncedToCloud: false,
     };
 
     const result = await reportsCollection.insertOne(reportData);

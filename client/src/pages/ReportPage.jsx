@@ -4,6 +4,7 @@ import { connectSocket } from "../utils/socket";
 import { TrendingUp, Search } from "lucide-react";
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:5000";
+const IS_LOCAL_MODE = import.meta.env?.VITE_LOCAL_MODE === "true";
 
 const TABS = [
   { key: "pending",  label: "Pending" },
@@ -93,6 +94,7 @@ export default function ReportsPage() {
             hasImage: report.images?.length > 0,
             imageUrl: report.images?.[0] || null,
             status: report.status || "pending",
+            source: report.source || "online",
             adminNotes: report.adminNotes || null,
             resolvedBy: report.resolvedBy || null,
             resolvedAt: report.resolvedAt || null,
@@ -230,6 +232,13 @@ export default function ReportsPage() {
 
   return (
     <div className="p-3 sm:p-6">
+      {IS_LOCAL_MODE && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
+          <strong>Local Mode Active</strong> — Reports are stored on this device.
+          They will sync to CDRRMO when internet is restored.
+        </div>
+      )}
+
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 bg-white px-6 py-3 rounded-lg shadow-lg border-l-4 ${
