@@ -309,10 +309,11 @@ router.post("/donations", optionalProtect, async (req, res) => {
         donorName  = "Anonymous";
         donorEmail = `anonymous+${req.user.id}@etelly.local`;
       } else {
-        const profile = await User.findById(req.user.id).select("name email").lean();
+        const profile = await User.findById(req.user.id).select("name email address").lean();
         if (!profile) return res.status(404).json({ success: false, error: "User not found." });
-        donorName  = donorName  || profile.name;
-        donorEmail = donorEmail || profile.email;
+        donorName     = donorName     || profile.name;
+        donorEmail    = donorEmail    || profile.email;
+        pickupAddress = pickupAddress || profile.address || null;
       }
     }
 
@@ -362,15 +363,14 @@ router.post("/donations", optionalProtect, async (req, res) => {
 // PATCH /api/community/donations/:id/schedule
 router.patch("/donations/:id/schedule", protect, requireAdminOrBarangay, async (req, res) => {
   try {
-    const { dropOffPoint, scheduledWindow, note } = req.body;
-    if (!dropOffPoint?.trim()) return res.status(400).json({ success: false, error: "Drop-off point is required." });
+    const { scheduledWindow, note } = req.body;
 
     const donation = await ResourceDonation.findById(req.params.id);
     if (!donation) return res.status(404).json({ success: false, error: "Donation not found." });
     if (donation.status !== "offered") return res.status(400).json({ success: false, error: "Only offered donations can be scheduled." });
 
     donation.status = "scheduled";
-    donation.dropOffPoint = dropOffPoint;
+    donation.dropOffPoint = donation.barangay;
     donation.scheduledWindow = scheduledWindow || "";
     donation.actionLog.push({ action: "scheduled", by: req.user.name, byId: req.user.id, note: note || "" });
     await donation.save();

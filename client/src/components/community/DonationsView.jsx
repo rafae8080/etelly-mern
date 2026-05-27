@@ -19,6 +19,7 @@ export default function DonationsView({ donations, loading, onRefresh }) {
         return (
           d.donorName?.toLowerCase().includes(term) ||
           d.donorEmail?.toLowerCase().includes(term) ||
+          d.pickupAddress?.toLowerCase().includes(term) ||
           d.barangay?.toLowerCase().includes(term) ||
           d.itemDescription?.toLowerCase().includes(term) ||
           d.category?.toLowerCase().includes(term) ||
@@ -66,8 +67,8 @@ export default function DonationsView({ donations, loading, onRefresh }) {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Item Name</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Quantity</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Donated By</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Barangay</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Donor</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Address</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Ref Code</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Drop-off</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
@@ -111,7 +112,7 @@ export default function DonationsView({ donations, loading, onRefresh }) {
                         {don.quantity} {don.unit}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{don.donorName}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{don.barangay}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{don.pickupAddress || "—"}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-mono">{don.referenceCode}</td>
                       <td className="px-6 py-4 text-sm">
                         {don.dropOffPoint

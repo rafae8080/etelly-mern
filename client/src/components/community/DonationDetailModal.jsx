@@ -5,10 +5,10 @@ import { API_BASE, authHeaders, formatDate, getStatusColor, getStatusDotColor } 
 import LogModal from "./LogModal";
 
 export default function DonationDetailModal({ don, onClose, onRefresh }) {
-  const [mode,            setMode]            = useState(null);
-  const [dropOffPoint,    setDropOffPoint]    = useState(don.dropOffPoint || "");
-  const [scheduledWindow, setScheduledWindow] = useState(don.scheduledWindow || "");
-  const [note,            setNote]            = useState("");
+  const [mode,      setMode]      = useState(null);
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
+  const [note,      setNote]      = useState("");
   const [submitting,      setSubmitting]      = useState(false);
   const [error,           setError]           = useState("");
   const [showLog,         setShowLog]         = useState(false);
@@ -17,13 +17,16 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
   const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
 
   const handleSchedule = async () => {
-    if (!dropOffPoint.trim()) { setError("Drop-off point is required."); return; }
+    if (!schedDate) { setError("Please select a date."); return; }
+    const scheduledWindow = schedTime.trim()
+      ? `${schedDate} — ${schedTime.trim()}`
+      : schedDate;
     setSubmitting(true); setError("");
     try {
       const res = await fetch(`${API_BASE}/api/community/donations/${don._id}/schedule`, {
         method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify({ dropOffPoint, scheduledWindow, note }),
+        body: JSON.stringify({ scheduledWindow, note }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Action failed.");
@@ -45,7 +48,7 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
     } catch (err) { setError(err.message); setSubmitting(false); }
   };
 
-  const resetMode = () => { setMode(null); setNote(""); setError(""); };
+  const resetMode = () => { setMode(null); setSchedDate(""); setSchedTime(""); setNote(""); setError(""); };
 
   if (showLog) return <LogModal item={don} onClose={() => setShowLog(false)} />;
 
@@ -80,9 +83,16 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
           </div>
 
           <div>
-            <p className="text-sm font-medium text-gray-700">Barangay</p>
-            <p className="text-gray-900 text-sm mt-1">{don.barangay}</p>
+            <p className="text-sm font-medium text-gray-700">Drop-off Barangay</p>
+            <p className="text-gray-900 text-sm mt-1 capitalize">{don.barangay || "—"}</p>
           </div>
+
+          {don.pickupAddress && (
+            <div>
+              <p className="text-sm font-medium text-gray-700">Donor Address</p>
+              <p className="text-gray-900 text-sm mt-1">{don.pickupAddress}</p>
+            </div>
+          )}
 
           <div>
             <p className="text-sm font-medium text-gray-700">Item Donated</p>
@@ -124,25 +134,24 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
             <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Drop-off Point <span className="text-red-500">*</span>
+                  Drop-off Date <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="text"
-                  value={dropOffPoint}
-                  onChange={(e) => setDropOffPoint(e.target.value)}
-                  placeholder="e.g. Barangay San Roque Hall"
+                  type="date"
+                  value={schedDate}
+                  onChange={(e) => setSchedDate(e.target.value)}
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
                 />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Collection Window
+                  Time Window
                 </label>
                 <input
                   type="text"
-                  value={scheduledWindow}
-                  onChange={(e) => setScheduledWindow(e.target.value)}
-                  placeholder="e.g. Saturday, May 4 — 9am to 12pm"
+                  value={schedTime}
+                  onChange={(e) => setSchedTime(e.target.value)}
+                  placeholder="e.g. 9am to 12pm"
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
                 />
               </div>

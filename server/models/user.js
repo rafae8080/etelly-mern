@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema(
     },
     mustChangePassword: { type: Boolean, default: false },
     contactEmail: { type: String, default: "" },
+    address: { type: String, default: "" },
   },
   { timestamps: true },
 );

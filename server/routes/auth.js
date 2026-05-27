@@ -38,6 +38,7 @@ router.post("/login", async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        address: user.address || "",
         mustChangePassword: user.mustChangePassword ?? false,
       },
     });
@@ -48,7 +49,7 @@ router.post("/login", async (req, res) => {
 
 // POST /api/auth/register — citizen self-registration (role always "user")
 router.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, address } = req.body;
 
   if (!name?.trim() || !email?.trim() || !password) {
     return res.status(400).json({ message: "Name, email, and password are required." });
@@ -69,6 +70,7 @@ router.post("/register", async (req, res) => {
       email: email.trim().toLowerCase(),
       password: hashed,
       role: "user",
+      address: address?.trim() || "",
     });
 
     const token = jwt.sign(
@@ -84,8 +86,27 @@ router.post("/register", async (req, res) => {
         name:  user.name,
         email: user.email,
         role:  user.role,
+        address: user.address || "",
         mustChangePassword: false,
       },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET /api/auth/me — returns current user's profile (used by mobile to refresh address)
+router.get("/me", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      address: user.address || "",
+      mustChangePassword: user.mustChangePassword ?? false,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
