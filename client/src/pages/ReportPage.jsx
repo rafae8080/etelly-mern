@@ -197,11 +197,11 @@ export default function ReportsPage() {
 
   const tabCount = { pending: pendingCount, ongoing: ongoingCount, resolved: resolvedCount, rejected: rejectedCount };
 
-  const totalReports    = reports.length;
-  const activeReports     = reports.filter((r) => r.status === "pending" || r.status === "approved");
-  const highPriorityCount = activeReports.filter((r) => r.severity === "high").length;
-  const rescueNeededCount = activeReports.filter((r) => r.rescue === true).length;
-  const newTodayCount   = reports.filter((r) => {
+  const ongoingReports    = reports.filter((r) => r.status === "approved");
+  const totalReports      = ongoingReports.length;
+  const highPriorityCount = ongoingReports.filter((r) => r.severity === "high").length;
+  const rescueNeededCount = ongoingReports.filter((r) => r.rescue === true).length;
+  const newTodayCount     = ongoingReports.filter((r) => {
     if (!r.rawTimestamp) return false;
     return new Date(r.rawTimestamp).toDateString() === new Date().toDateString();
   }).length;
