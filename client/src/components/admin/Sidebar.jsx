@@ -7,7 +7,6 @@ import {
   Map,
   Droplets,
   MapPin,
-  Package,
   Users,
   Menu,
   ChevronLeft,
@@ -22,7 +21,6 @@ const menuItems = [
   { icon: Volume2, label: "Reports", href: "/reports" },
   { icon: Map, label: "Hazard Map", href: "/hazard-map" },
   { icon: MapPin, label: "Evacuation Centers", href: "/evacuation" },
-  { icon: Package, label: "Resources", href: "/resources" },
   {
     icon: HandHelpingIcon,
     label: "Community Sharing",

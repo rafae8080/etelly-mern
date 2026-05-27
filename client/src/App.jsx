@@ -13,7 +13,6 @@ import EvacuationPage from "./pages/EvacuationPage";
 import CommunitySharingPage from "./pages/CommunitySharingPage";
 import SafetyTipsPage from "./pages/SafetyTipsPage";
 import SafetyTipDetailPage from "./pages/SafetyTipDetailPage";
-import ResourcesPage from "./pages/ResourcesPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ReportsPage from "./pages/ReportPage";
 
@@ -174,11 +173,7 @@ export default function App() {
           path="/safety-tips/:slug"
           element={<ProtectedLayout Page={SafetyTipDetailPage} />}
         />
-        <Route
-          path="/resources"
-          element={<ProtectedLayout Page={ResourcesPage} />}
-        />
-        <Route
+<Route
           path="/manage-users"
           element={<ProtectedLayout Page={ManageUsersPage} />}
         />
