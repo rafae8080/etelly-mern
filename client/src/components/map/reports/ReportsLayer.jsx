@@ -468,6 +468,7 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
 
     // Community reports
     filteredReports.forEach((report) => {
+      if (!report) return;
       const coords = extractCoordinates(report);
       if (!coords) return;
 
@@ -515,15 +516,25 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
     });
 
     socket.on("report_status_updated", ({ reportId, status, report }) => {
-      setReports((prev) => {
-        if (status === "approved") {
-          const exists = prev.some((r) => r._id === reportId);
-          return exists
-            ? prev.map((r) => (r._id === reportId ? report : r))
-            : [...prev, report];
+      if (status === "approved") {
+        if (!report) {
+          // Server omitted the report object — refetch to stay in sync
+          fetchApprovedReports();
+          return;
         }
-        return prev.filter((r) => r._id !== reportId);
-      });
+        setReports((prev) => {
+          const id = String(reportId);
+          const exists = prev.some((r) => String(r._id) === id);
+          return exists
+            ? prev.map((r) => (String(r._id) === id ? report : r))
+            : [...prev, report];
+        });
+      } else {
+        // resolved / rejected → remove from map immediately
+        setReports((prev) =>
+          prev.filter((r) => String(r._id) !== String(reportId)),
+        );
+      }
     });
 
     socket.on("new_alert", fetchAlerts);

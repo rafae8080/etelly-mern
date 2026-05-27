@@ -28,6 +28,7 @@ export default function ReportTile({
   onResolve,
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
   const [resolveNotes, setResolveNotes] = useState("");
@@ -201,9 +202,17 @@ export default function ReportTile({
 
             {/* Image */}
             {hasImage && imageUrl && (
-              <div className="relative w-full h-64 overflow-hidden bg-gray-100">
+              <button
+                onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
+                className="relative w-full h-64 overflow-hidden bg-gray-100 block group cursor-zoom-in"
+              >
                 <img src={imageUrl} alt={`${type} incident`} className="w-full h-full object-cover" />
-              </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 text-white text-xs px-3 py-1.5 rounded-full font-medium">
+                    Click to view full image
+                  </span>
+                </div>
+              </button>
             )}
 
             {/* Details */}
@@ -372,6 +381,27 @@ export default function ReportTile({
               </div>
             )}
         </ModalShell>
+      )}
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+          >
+            <X size={22} className="text-white" />
+          </button>
+          <img
+            src={imageUrl}
+            alt={`${type} incident`}
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </>
   );

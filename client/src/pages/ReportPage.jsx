@@ -27,7 +27,7 @@ const getCurrentUser = () => {
 export default function ReportsPage() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("pending");
+  const [activeTab, setActiveTab] = useState("ongoing");
   const [search, setSearch] = useState("");
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
@@ -106,7 +106,8 @@ export default function ReportsPage() {
               report.location?.exactAddress ||
               report.location ||
               "Unknown location",
-            timestamp: new Date(report.timestamp).toLocaleString(),
+            timestamp: report.timestamp ? new Date(report.timestamp).toLocaleString() : "",
+            rawTimestamp: report.timestamp,
             reportedBy:
               report.userData?.fullName || report.userName || "Anonymous",
             hasImage: report.images?.length > 0,
@@ -201,8 +202,8 @@ export default function ReportsPage() {
   const highPriorityCount = activeReports.filter((r) => r.severity === "high").length;
   const rescueNeededCount = activeReports.filter((r) => r.rescue === true).length;
   const newTodayCount   = reports.filter((r) => {
-    if (!r.timestamp) return false;
-    return new Date(r.timestamp).toDateString() === new Date().toDateString();
+    if (!r.rawTimestamp) return false;
+    return new Date(r.rawTimestamp).toDateString() === new Date().toDateString();
   }).length;
 
   const filteredReports = reports.filter((r) => {
@@ -380,9 +381,13 @@ export default function ReportsPage() {
               <p className="text-sm text-gray-400 mt-2">
                 {search.trim()
                   ? "Try a different search term"
-                  : activeTab === "rejected"
-                  ? "No rejected reports"
-                  : "Submit a report from the mobile app to see it here"}
+                  : activeTab === "pending"
+                  ? "No pending reports — all reports have been reviewed"
+                  : activeTab === "ongoing"
+                  ? "No ongoing reports — approve a pending report to see it here"
+                  : activeTab === "resolved"
+                  ? "No resolved reports yet"
+                  : "No rejected reports"}
               </p>
             </div>
           ) : (

@@ -202,7 +202,11 @@ app.post("/api/reports/update-status", protect, requireAdminOrBarangay, async (r
       );
     if (result.modifiedCount > 0) {
       io.emit("report_updated", { reportId, status, adminNotes });
-      io.emit("report_status_updated", { reportId, status });
+      io.emit("report_status_updated", {
+        reportId,
+        status,
+        ...(status === "approved" && report ? { report } : {}),
+      });
 
       if (status === "approved" && report) {
         const severityMap = { high: "critical", medium: "warning", low: "watch" };
