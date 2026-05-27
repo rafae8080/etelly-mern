@@ -19,9 +19,9 @@ client/.env.*
 server/.env
 server/.env.*
 server/config/firebase-service-account.json
+server/uploads/
 
 
-SYSTEM_GUIDE.md
 MOBILE_FCM_GUIDE.md
 MOBILE_API.md
 HEROKU_GUIDE.md
@@ -32,6 +32,8 @@ SYSTEM_OVERVIEW.md
 techstack.md
 SYSTEM_AUDIT.md
 OFFLINE_IMPLEMENTATION.md
+
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

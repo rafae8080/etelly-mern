@@ -86,7 +86,7 @@ router.post("/create", async (req, res) => {
     const reportData = {
       emergencyType, severity, description, location,
       latitude, longitude, userName, phoneNumber,
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images.filter((s) => typeof s === "string" && s.startsWith("http")) : [],
       barangay: barangay || "",
       timestamp: new Date(),
       status: "pending",

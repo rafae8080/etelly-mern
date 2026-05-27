@@ -16,6 +16,7 @@ import communityRoutes from "./routes/community.js";
 import pushRoutes, { sendNotificationToAll, sendAdminNotification } from "./routes/push.js";
 import inventoryRoutes from "./routes/inventory.js";
 import syncRoutes from "./routes/sync.js";
+import uploadImagesRoutes from "./routes/uploadImages.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
 import { syncReports, startSyncScheduler } from "./scripts/syncToCloud.js";
 import Alert from "./models/Alert.js";
@@ -79,6 +80,7 @@ app.set("io", io);
 // Routes
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/reports/create", publicPostLimiter);
+app.use("/api/reports/upload-images", publicPostLimiter);
 app.post("/api/community/requests", publicPostLimiter);
 app.post("/api/community/donations", publicPostLimiter);
 
@@ -92,6 +94,8 @@ app.use("/api/community", communityRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/sync", syncRoutes);
+app.use("/api/reports", uploadImagesRoutes);
+app.use("/uploads", express.static(join(dirname(fileURLToPath(import.meta.url)), "uploads")));
 
 // Socket.IO
 io.on("connection", (socket) => {
