@@ -25,7 +25,8 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 5 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    // application/octet-stream occurs when mobile sends XFile with null mimeType
+    if (file.mimetype.startsWith("image/") || file.mimetype === "application/octet-stream") {
       cb(null, true);
     } else {
       cb(Object.assign(new Error("Only image files are accepted"), { status: 400 }));
