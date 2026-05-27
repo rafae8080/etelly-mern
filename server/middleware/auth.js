@@ -27,11 +27,18 @@ export const requireAdminOrBarangay = (req, res, next) => {
 };
 
 // Soft auth — sets req.user if a valid Bearer token is present, otherwise req.user = null.
-// Use on endpoints that accept both anonymous (web form) and authenticated (mobile) callers.
+// Unlike protect(), always calls next() — invalid/expired tokens are treated as anonymous.
 export const optionalProtect = (req, res, next) => {
-  if (req.headers.authorization?.startsWith("Bearer ")) {
-    return protect(req, res, next);
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    try {
+      req.user = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      req.user = null;
+    }
+  } else {
+    req.user = null;
   }
-  req.user = null;
   next();
 };
