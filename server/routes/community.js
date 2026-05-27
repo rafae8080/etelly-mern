@@ -5,7 +5,7 @@ import InventoryItem    from "../models/InventoryItem.js";
 import InventoryLog     from "../models/InventoryLog.js";
 import Alert            from "../models/Alert.js";
 import User             from "../models/user.js";
-import { protect, requireAdminOrBarangay } from "../middleware/auth.js";
+import { protect, requireAdminOrBarangay, optionalProtect } from "../middleware/auth.js";
 import { pushItemAlert } from "../services/inventoryAlerts.js";
 import { sendAdminNotification } from "./push.js";
 
@@ -77,7 +77,9 @@ router.get("/requests/mine", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("email").lean();
     if (!user) return res.status(404).json({ success: false, error: "User not found." });
-    const requests = await ResourceRequest.find({ requesterEmail: user.email }).sort({ createdAt: -1 }).lean();
+    const requests = await ResourceRequest.find({
+      $or: [{ requesterEmail: user.email }, { userId: req.user.id }],
+    }).sort({ createdAt: -1 }).lean();
     res.json({ success: true, requests });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -89,7 +91,9 @@ router.get("/donations/mine", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("email").lean();
     if (!user) return res.status(404).json({ success: false, error: "User not found." });
-    const donations = await ResourceDonation.find({ donorEmail: user.email }).sort({ createdAt: -1 }).lean();
+    const donations = await ResourceDonation.find({
+      $or: [{ donorEmail: user.email }, { userId: req.user.id }],
+    }).sort({ createdAt: -1 }).lean();
     res.json({ success: true, donations });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -97,18 +101,40 @@ router.get("/donations/mine", protect, async (req, res) => {
 });
 
 // POST /api/community/requests
-// Called by mobile app — no auth required yet.
-// Layer 1: one active request per category per user.
-// Layer 2: household flag if same address+barangay+category is already active.
-router.post("/requests", async (req, res) => {
+// Accepts two formats:
+//   Web form  — sends requesterName/requesterEmail/barangay/address/category/itemDescription (no auth)
+//   Mobile    — sends JWT + resourceId/resourceName/quantity/requestType/urgent/gps (auth required)
+// Layer 1: one active request per category per requester email.
+router.post("/requests", optionalProtect, async (req, res) => {
   try {
-    const { requesterName, requesterEmail, barangay, address, category, itemDescription, quantity, unit, reason } = req.body;
+    let {
+      requesterName, requesterEmail, barangay, address, category,
+      itemDescription, quantity, unit, reason,
+      // Mobile-only fields
+      resourceId, resourceName, requestType, urgent, gpsLat, gpsLng, phone,
+    } = req.body;
 
-    if (!requesterName || !requesterEmail || !barangay || !address || !category || !itemDescription || !quantity) {
+    // Mobile: backfill identity from the authenticated user's profile
+    if (req.user && (!requesterName || !requesterEmail)) {
+      const profile = await User.findById(req.user.id).select("name email").lean();
+      if (!profile) return res.status(404).json({ success: false, error: "User not found." });
+      requesterName  = requesterName  || profile.name;
+      requesterEmail = requesterEmail || profile.email;
+    }
+
+    // Map mobile resourceName → itemDescription when web field is absent
+    if (!itemDescription && resourceName) itemDescription = resourceName;
+
+    // Defaults for fields mobile may not supply
+    barangay = barangay || "unknown";
+    address  = address  || "";
+    category = category || "other";
+
+    if (!requesterName || !requesterEmail || !itemDescription || !quantity) {
       return res.status(400).json({ success: false, error: "Missing required fields." });
     }
 
-    // Layer 1 — one active request per category per user
+    // Layer 1 — one active request per category per requester
     const existingActive = await ResourceRequest.findOne({
       requesterEmail,
       category,
@@ -127,14 +153,24 @@ router.post("/requests", async (req, res) => {
       quantity: Number(quantity),
       unit: unit || "pcs",
       reason: reason || "",
+      userId:      req.user ? req.user.id : null,
+      resourceId:  resourceId  || null,
+      requestType: requestType || "standard",
+      urgent:      urgent      || false,
+      gpsLat:      gpsLat      ?? null,
+      gpsLng:      gpsLng      ?? null,
+      phone:       phone        || null,
     });
+
+    const io = req.app.get("io");
+    if (io) io.emit("new_community_request", { request });
 
     sendAdminNotification({
       title: `New Resource Request — ${category}`,
       body: `${requesterName} from ${barangay} is requesting ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
       url: "/community",
       tag: `request-${request._id}`,
-      urgent: false,
+      urgent: urgent || false,
     }).catch((err) => console.error("[Push] Request notification failed:", err));
 
     res.status(201).json({ success: true, request });
@@ -154,6 +190,9 @@ router.patch("/requests/:id/approve", protect, requireAdminOrBarangay, async (re
     request.status = "approved";
     request.actionLog.push({ action: "approved", by: req.user.name, byId: req.user.id, note: note || "" });
     await request.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
 
     res.json({ success: true, request });
   } catch (err) {
@@ -175,6 +214,9 @@ router.patch("/requests/:id/reject", protect, requireAdminOrBarangay, async (req
     request.actionLog.push({ action: "rejected", by: req.user.name, byId: req.user.id, note });
     await request.save();
 
+    const io = req.app.get("io");
+    if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
+
     res.json({ success: true, request });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -189,9 +231,24 @@ router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (re
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
     if (request.status !== "approved") return res.status(400).json({ success: false, error: "Only approved requests can be marked fulfilled." });
 
+    // Atomic inventory deduction — runs only when request has a linked inventory item
+    if (request.resourceId) {
+      const deducted = await InventoryItem.findOneAndUpdate(
+        { _id: request.resourceId, quantity: { $gte: request.quantity } },
+        { $inc: { quantity: -request.quantity } },
+        { new: true },
+      );
+      if (!deducted) {
+        return res.status(409).json({ success: false, error: "Insufficient stock to fulfill this request." });
+      }
+    }
+
     request.status = "fulfilled";
     request.actionLog.push({ action: "fulfilled", by: req.user.name, byId: req.user.id, note: note || "" });
     await request.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
 
     res.json({ success: true, request });
   } catch (err) {
@@ -213,6 +270,9 @@ router.patch("/requests/:id/cancel", protect, async (req, res) => {
     request.actionLog.push({ action: "cancelled", by: req.user.name, byId: req.user.id, note: note || "" });
     await request.save();
 
+    const io = req.app.get("io");
+    if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
+
     res.json({ success: true, request });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -231,12 +291,39 @@ router.get("/donations", protect, async (req, res) => {
   }
 });
 
-// POST /api/community/donations — mobile, no auth required
-router.post("/donations", async (req, res) => {
+// POST /api/community/donations
+// Accepts two formats:
+//   Web form  — sends donorName/donorEmail/barangay/category/itemDescription (no auth)
+//   Mobile    — sends JWT + resourceId/resourceName/quantity/gps/phone (auth required)
+router.post("/donations", optionalProtect, async (req, res) => {
   try {
-    const { donorName, donorEmail, barangay, category, itemDescription, quantity, unit } = req.body;
+    let {
+      donorName, donorEmail, barangay, category, itemDescription, quantity, unit,
+      // Mobile-only fields
+      resourceId, resourceName, phone, dob, gpsLat, gpsLng, pickupAddress, isAnonymous,
+    } = req.body;
 
-    if (!donorName || !donorEmail || !barangay || !category || !itemDescription || !quantity) {
+    // Mobile: backfill identity from authenticated user (unless anonymous donation)
+    if (req.user && (!donorName || !donorEmail)) {
+      if (isAnonymous) {
+        donorName  = "Anonymous";
+        donorEmail = `anonymous+${req.user.id}@etelly.local`;
+      } else {
+        const profile = await User.findById(req.user.id).select("name email").lean();
+        if (!profile) return res.status(404).json({ success: false, error: "User not found." });
+        donorName  = donorName  || profile.name;
+        donorEmail = donorEmail || profile.email;
+      }
+    }
+
+    // Map mobile resourceName → itemDescription when web field is absent
+    if (!itemDescription && resourceName) itemDescription = resourceName;
+
+    // Defaults for fields mobile may not supply
+    barangay = barangay || "unknown";
+    category = category || "other";
+
+    if (!donorName || !donorEmail || !itemDescription || !quantity) {
       return res.status(400).json({ success: false, error: "Missing required fields." });
     }
 
@@ -245,11 +332,22 @@ router.post("/donations", async (req, res) => {
       category, itemDescription,
       quantity: Number(quantity),
       unit: unit || "pcs",
+      userId:        req.user ? req.user.id : null,
+      resourceId:    resourceId    || null,
+      phone:         phone         || null,
+      dob:           dob           || null,
+      gpsLat:        gpsLat        ?? null,
+      gpsLng:        gpsLng        ?? null,
+      pickupAddress: pickupAddress || null,
+      isAnonymous:   isAnonymous   || false,
     });
+
+    const io = req.app.get("io");
+    if (io) io.emit("new_community_donation", { donation });
 
     sendAdminNotification({
       title: `New Donation Offer — ${category}`,
-      body: `${donorName} from ${barangay} is offering ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
+      body: `${isAnonymous ? "Anonymous donor" : donorName} from ${barangay} is offering ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
       url: "/community",
       tag: `donation-${donation._id}`,
       urgent: false,
@@ -277,6 +375,9 @@ router.patch("/donations/:id/schedule", protect, requireAdminOrBarangay, async (
     donation.actionLog.push({ action: "scheduled", by: req.user.name, byId: req.user.id, note: note || "" });
     await donation.save();
 
+    const io = req.app.get("io");
+    if (io) io.emit("community_donation_updated", { id: donation._id, status: donation.status });
+
     res.json({ success: true, donation });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -294,6 +395,9 @@ router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (r
     donation.status = "received";
     donation.actionLog.push({ action: "received", by: req.user.name, byId: req.user.id, note: note || "" });
     await donation.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("community_donation_updated", { id: donation._id, status: donation.status });
 
     // ── Auto-transfer to inventory ──────────────────────────────────────────
     try {
@@ -368,6 +472,9 @@ router.patch("/donations/:id/cancel", protect, async (req, res) => {
     donation.status = "cancelled";
     donation.actionLog.push({ action: "cancelled", by: req.user.name, byId: req.user.id, note: note || "" });
     await donation.save();
+
+    const io = req.app.get("io");
+    if (io) io.emit("community_donation_updated", { id: donation._id, status: donation.status });
 
     res.json({ success: true, donation });
   } catch (err) {

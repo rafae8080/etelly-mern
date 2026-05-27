@@ -32,6 +32,16 @@ const ResourceDonationSchema = new mongoose.Schema({
 
   // Full audit trail
   actionLog: [actionLogSchema],
+
+  // Mobile-app fields (optional — absent on web-form submissions)
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  resourceId:    { type: String, default: null },
+  phone:         { type: String, default: null },
+  dob:           { type: Date, default: null },
+  gpsLat:        { type: Number, default: null },
+  gpsLng:        { type: Number, default: null },
+  pickupAddress: { type: String, default: null },
+  isAnonymous:   { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Generate reference code before saving if not set

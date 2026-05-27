@@ -27,6 +27,15 @@ const ResourceRequestSchema = new mongoose.Schema({
 
   // Full audit trail
   actionLog: [actionLogSchema],
+
+  // Mobile-app fields (optional — absent on web-form submissions)
+  userId:      { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  resourceId:  { type: String, default: null },
+  requestType: { type: String, enum: ["standard", "emergency"], default: "standard" },
+  urgent:      { type: Boolean, default: false },
+  gpsLat:      { type: Number, default: null },
+  gpsLng:      { type: Number, default: null },
+  phone:       { type: String, default: null },
 }, { timestamps: true });
 
 export default mongoose.model("ResourceRequest", ResourceRequestSchema);

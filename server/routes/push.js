@@ -2,6 +2,7 @@ import express from "express";
 import webpush from "web-push";
 import PushSubscription from "../models/PushSubscription.js";
 import FcmToken from "../models/FcmToken.js";
+import User from "../models/user.js";
 import { protect } from "../middleware/auth.js";
 import { sendFCMToAll } from "../services/fcm.js";
 
@@ -119,10 +120,32 @@ export async function sendNotificationToAll(payload) {
 }
 
 // Admin-only sender — VAPID only, no FCM.
-// Use for pending reports, resource requests, donations, and inventory alerts
-// that are operational tasks for CDRRMO — residents do not need to see these.
+// Sends exclusively to admin and barangay_official subscribers so residents
+// are not spammed with operational CDRRMO tasks.
 export async function sendAdminNotification(payload) {
-  await sendPushToAll(payload);
+  initVapid();
+  const adminUsers = await User.find({
+    role: { $in: ["admin", "barangay_official"] },
+  }).select("_id").lean();
+  const adminIds = adminUsers.map((u) => u._id);
+  const subs = await PushSubscription.find({ userId: { $in: adminIds } });
+  console.log(`[Push] Sending admin notification to ${subs.length} admin subscriber(s)`);
+  await Promise.allSettled(
+    subs.map((sub) =>
+      webpush
+        .sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify(payload),
+        )
+        .then(() => console.log("[Push] Admin sent OK →", sub.endpoint.slice(0, 60)))
+        .catch(async (err) => {
+          console.error("[Push] Admin failed →", err.statusCode, err.body ?? err.message);
+          if (err.statusCode === 410) {
+            await PushSubscription.deleteOne({ endpoint: sub.endpoint });
+          }
+        }),
+    ),
+  );
 }
 
 export default router;

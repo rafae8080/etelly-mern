@@ -222,7 +222,9 @@ app.post("/api/reports/update-status", protect, requireAdminOrBarangay, async (r
           location: report.location?.exactAddress || (typeof report.location === "string" ? report.location : "") || "Unknown location",
           source: "residents",
           linkedReportId: new mongoose.Types.ObjectId(reportId),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          lat: report.latitude ?? null,
+          lng: report.longitude ?? null,
+          // No expiresAt — community report alerts must be resolved/dismissed manually
         });
         io.emit("new_alert", savedAlert.toObject());
 

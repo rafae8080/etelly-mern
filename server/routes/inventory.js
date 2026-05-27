@@ -49,6 +49,22 @@ const BEVERLY_HILLS_SEED = [
   { name: "Generator Fuel (Diesel)",    category: "Other",            quantity: 25,  unit: "liters",  minQuantity: 15,  expiryDate: null },
 ];
 
+// GET /api/inventory/public?barangay=xxx — no auth required.
+// Returns available items (quantity > 0) for the mobile item picker.
+router.get("/public", async (req, res) => {
+  try {
+    const { barangay } = req.query;
+    const query = barangay && barangay !== "all" ? { barangay } : {};
+    const items = await InventoryItem.find({ ...query, quantity: { $gt: 0 } })
+      .select("_id name category quantity unit barangay")
+      .sort({ name: 1 })
+      .lean();
+    res.json({ success: true, items });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/inventory?barangay=xxx
 router.get("/", protect, async (req, res) => {
   try {

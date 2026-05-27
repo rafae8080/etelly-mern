@@ -25,3 +25,13 @@ export const requireAdminOrBarangay = (req, res, next) => {
     return res.status(403).json({ message: "Insufficient permissions" });
   next();
 };
+
+// Soft auth — sets req.user if a valid Bearer token is present, otherwise req.user = null.
+// Use on endpoints that accept both anonymous (web form) and authenticated (mobile) callers.
+export const optionalProtect = (req, res, next) => {
+  if (req.headers.authorization?.startsWith("Bearer ")) {
+    return protect(req, res, next);
+  }
+  req.user = null;
+  next();
+};
