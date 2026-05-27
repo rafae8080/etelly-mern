@@ -72,6 +72,32 @@ function buildMulticastMessage(payload, tokens) {
   };
 }
 
+export async function sendFCMToUser(userId, payload) {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !existsSync(SERVICE_ACCOUNT_PATH)) return;
+  initFirebase();
+
+  const tokenDocs = await FcmToken.find({ userId }, "token").lean();
+  if (!tokenDocs.length) return;
+
+  const tokens = tokenDocs.map((d) => d.token);
+  const message = buildMulticastMessage(payload, tokens);
+  const response = await admin.messaging().sendEachForMulticast(message);
+
+  const toDelete = [];
+  response.responses.forEach((r, idx) => {
+    if (!r.success) {
+      const code = r.error?.code;
+      if (
+        code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token"
+      ) {
+        toDelete.push(tokens[idx]);
+      }
+    }
+  });
+  if (toDelete.length) await FcmToken.deleteMany({ token: { $in: toDelete } });
+}
+
 export async function sendFCMToAll(payload) {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !existsSync(SERVICE_ACCOUNT_PATH)) {
     console.log("[FCM] No Firebase credentials configured — skipping");

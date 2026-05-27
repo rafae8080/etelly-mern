@@ -42,6 +42,8 @@ const ResourceDonationSchema = new mongoose.Schema({
   gpsLng:        { type: Number, default: null },
   pickupAddress: { type: String, default: null },
   isAnonymous:   { type: Boolean, default: false },
+  isOfficial:       { type: Boolean, default: false },
+  matchedRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "ResourceRequest", default: null },
 }, { timestamps: true });
 
 // Generate reference code before saving if not set.

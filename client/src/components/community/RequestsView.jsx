@@ -3,14 +3,24 @@ import { splitDateTime } from "./helpers";
 import StatusCell from "./StatusCell";
 import RequestDetailModal from "./RequestDetailModal";
 
-const TABS = ["Pending", "Approved", "Fulfilled", "Rejected", "Cancelled"];
+const TABS = ["Open", "Matched", "Fulfilled", "Cancelled"];
+
+// "Open" covers legacy pending/approved docs during transition
+const TAB_STATUSES = {
+  Open:      ["open", "pending", "approved"],
+  Matched:   ["matched"],
+  Fulfilled: ["fulfilled"],
+  Cancelled: ["cancelled"],
+};
 
 export default function RequestsView({ requests, loading, onRefresh }) {
-  const [activeTab, setActiveTab] = useState("Pending");
+  const [activeTab, setActiveTab] = useState("Open");
   const [selected,  setSelected]  = useState(null);
   const [search,    setSearch]    = useState("");
 
-  const filtered = requests.filter((r) => r.status === activeTab.toLowerCase());
+  const filtered = requests.filter((r) =>
+    TAB_STATUSES[activeTab]?.includes(r.status),
+  );
 
   const displayed = search.trim()
     ? filtered.filter((r) => {
@@ -67,6 +77,7 @@ export default function RequestsView({ requests, loading, onRefresh }) {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Quantity</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Requested By</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Address</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Offers</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Time</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
@@ -76,7 +87,7 @@ export default function RequestsView({ requests, loading, onRefresh }) {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 7 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <td key={j} className="px-6 py-4">
                         <div className="h-4 bg-gray-100 rounded w-full" />
                       </td>
@@ -85,7 +96,7 @@ export default function RequestsView({ requests, loading, onRefresh }) {
                 ))
               ) : displayed.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-gray-500 text-sm">
+                  <td colSpan={8} className="px-6 py-16 text-center text-gray-500 text-sm">
                     {search.trim()
                       ? `No results for "${search}" in ${activeTab.toLowerCase()} requests.`
                       : `No ${activeTab.toLowerCase()} requests.`}
@@ -94,6 +105,9 @@ export default function RequestsView({ requests, loading, onRefresh }) {
               ) : (
                 displayed.map((req) => {
                   const { date, time } = splitDateTime(req.createdAt);
+                  const offerCount = (req.pledges || []).filter(
+                    (p) => p.status !== "withdrawn",
+                  ).length;
                   return (
                     <tr
                       key={req._id}
@@ -114,6 +128,15 @@ export default function RequestsView({ requests, loading, onRefresh }) {
                         <span className="block truncate">{req.address}</span>
                         {req.barangay && (
                           <span className="block text-xs text-gray-400 mt-0.5 truncate">{req.barangay}</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        {offerCount > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                            {offerCount} {offerCount === 1 ? "offer" : "offers"}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{date}</td>

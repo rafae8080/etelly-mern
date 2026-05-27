@@ -111,7 +111,17 @@ export default function DonationsView({ donations, loading, onRefresh }) {
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {don.quantity} {don.unit}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{don.donorName}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{don.donorName}</span>
+                          {don.isOfficial && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">Official</span>
+                          )}
+                          {don.matchedRequestId && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-700">Linked</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{don.pickupAddress || "—"}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-mono">{don.referenceCode}</td>
                       <td className="px-6 py-4 text-sm">

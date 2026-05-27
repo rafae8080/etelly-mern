@@ -4,7 +4,7 @@ import PushSubscription from "../models/PushSubscription.js";
 import FcmToken from "../models/FcmToken.js";
 import User from "../models/user.js";
 import { protect } from "../middleware/auth.js";
-import { sendFCMToAll } from "../services/fcm.js";
+import { sendFCMToAll, sendFCMToUser } from "../services/fcm.js";
 
 const router = express.Router();
 
@@ -117,6 +117,22 @@ export async function sendNotificationToAll(payload) {
   if (fcmResult.status === "rejected") {
     console.error("[Notify] FCM channel failed:", fcmResult.reason?.message);
   }
+}
+
+// User-targeted sender — VAPID (web/PWA) + FCM (mobile) for one specific user.
+export async function sendPushToUser(userId, payload) {
+  initVapid();
+  const subs = await PushSubscription.find({ userId });
+  await Promise.allSettled([
+    ...subs.map((sub) =>
+      webpush
+        .sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(payload))
+        .catch(async (err) => {
+          if (err.statusCode === 410) await PushSubscription.deleteOne({ endpoint: sub.endpoint });
+        })
+    ),
+    sendFCMToUser(userId, payload).catch(() => {}),
+  ]);
 }
 
 // Admin-only sender — VAPID only, no FCM.

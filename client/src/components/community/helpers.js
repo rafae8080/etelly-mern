@@ -23,6 +23,8 @@ export function splitDateTime(dateStr) {
 
 export function getStatusColor(status) {
   switch (status) {
+    case "open":      return "text-blue-600";
+    case "matched":   return "text-purple-600";
     case "pending":   return "text-orange-500";
     case "approved":  return "text-blue-500";
     case "fulfilled": return "text-green-500";
@@ -37,6 +39,8 @@ export function getStatusColor(status) {
 
 export function getStatusDotColor(status) {
   switch (status) {
+    case "open":      return "bg-blue-600";
+    case "matched":   return "bg-purple-600";
     case "pending":   return "bg-orange-500";
     case "approved":  return "bg-blue-500";
     case "fulfilled": return "bg-green-500";

@@ -1,13 +1,15 @@
 import express from "express";
+import mongoose from "mongoose";
 import ResourceRequest  from "../models/ResourceRequest.js";
 import ResourceDonation from "../models/ResourceDonation.js";
+import ResourceMessage  from "../models/ResourceMessage.js";
 import InventoryItem    from "../models/InventoryItem.js";
 import InventoryLog     from "../models/InventoryLog.js";
 import Alert            from "../models/Alert.js";
 import User             from "../models/user.js";
 import { protect, requireAdminOrBarangay, optionalProtect } from "../middleware/auth.js";
 import { pushItemAlert } from "../services/inventoryAlerts.js";
-import { sendAdminNotification } from "./push.js";
+import { sendAdminNotification, sendPushToUser } from "./push.js";
 
 const DONATION_CATEGORY_MAP = {
   food:     "Food & Water",
@@ -23,12 +25,23 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function anonymizeName(fullName) {
+  if (!fullName) return "Anonymous";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+function isParticipant(request, userId, role) {
+  if (["admin", "barangay_official"].includes(role)) return true;
+  if (request.userId?.toString() === userId) return true;
+  if (request.matchedPledgerId?.toString() === userId) return true;
+  return false;
+}
+
 const router = express.Router();
 
 // ─── Priority helper ──────────────────────────────────────────────────────────
-// Scores each request's barangay against currently active alerts.
-// Returns { level, score } — score is used for sorting.
-
 const SEVERITY_SCORE = { evacuate: 4, critical: 3, warning: 2, watch: 1 };
 
 function calcPriority(barangay, activeAlerts) {
@@ -47,11 +60,70 @@ function calcPriority(barangay, activeAlerts) {
   return { level, score };
 }
 
+// ─── Community Board (5.1) ────────────────────────────────────────────────────
+router.get("/board", optionalProtect, async (req, res) => {
+  try {
+    const { barangay } = req.query;
+    const requestFilter  = { status: { $in: ["open", "pending", "approved"] } };
+    const donationFilter = { status: "offered" };
+    if (barangay) {
+      const re = new RegExp(`^${escapeRegex(barangay)}$`, "i");
+      requestFilter.barangay  = re;
+      donationFilter.barangay = re;
+    }
+
+    const [rawRequests, rawDonations, activeAlerts] = await Promise.all([
+      ResourceRequest.find(requestFilter).sort({ createdAt: 1 }).lean(),
+      ResourceDonation.find(donationFilter).sort({ createdAt: -1 }).lean(),
+      Alert.find({ isActive: true }).select("barangays severity").lean(),
+    ]);
+
+    const requests = rawRequests.map((r) => {
+      const { level, score } = calcPriority(r.barangay, activeAlerts);
+      const pledgeCount = (r.pledges || []).filter((p) => p.status !== "withdrawn").length;
+      return {
+        _id: r._id,
+        requesterName: anonymizeName(r.requesterName),
+        barangay: r.barangay,
+        category: r.category,
+        itemDescription: r.itemDescription,
+        quantity: r.quantity,
+        unit: r.unit,
+        urgent: r.urgent,
+        status: r.status,
+        pledgeCount,
+        priority: level,
+        createdAt: r.createdAt,
+        _score: score,
+      };
+    });
+
+    requests.sort((a, b) => b._score - a._score || new Date(a.createdAt) - new Date(b.createdAt));
+    requests.forEach((r) => delete r._score);
+
+    const donations = rawDonations.map((d) => ({
+      _id: d._id,
+      donorName: d.isAnonymous ? "Anonymous" : d.donorName,
+      isOfficial: d.isOfficial || false,
+      barangay: d.barangay,
+      category: d.category,
+      itemDescription: d.itemDescription,
+      quantity: d.quantity,
+      unit: d.unit,
+      status: d.status,
+      createdAt: d.createdAt,
+    }));
+
+    res.json({ success: true, requests, donations });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Requests ─────────────────────────────────────────────────────────────────
 
-// GET /api/community/requests
-// Returns all requests sorted by priority (desc) then createdAt (asc).
-router.get("/requests", protect, async (req, res) => {
+// GET /api/community/requests — admin/barangay view with priority scoring (5.4)
+router.get("/requests", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const [requests, activeAlerts] = await Promise.all([
       ResourceRequest.find().sort({ createdAt: 1 }).lean(),
@@ -63,7 +135,6 @@ router.get("/requests", protect, async (req, res) => {
       ...calcPriority(r.barangay, activeAlerts),
     }));
 
-    // Sort: highest score first, FCFS tiebreaker (already sorted by createdAt asc)
     withPriority.sort((a, b) => b.score - a.score || 0);
 
     res.json({ success: true, requests: withPriority });
@@ -72,7 +143,7 @@ router.get("/requests", protect, async (req, res) => {
   }
 });
 
-// GET /api/community/requests/mine — mobile: returns the logged-in user's own requests
+// GET /api/community/requests/mine (5.3)
 router.get("/requests/mine", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("email").lean();
@@ -86,7 +157,7 @@ router.get("/requests/mine", protect, async (req, res) => {
   }
 });
 
-// GET /api/community/donations/mine — mobile: returns the logged-in user's own donations
+// GET /api/community/donations/mine (5.15)
 router.get("/donations/mine", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("email").lean();
@@ -100,21 +171,41 @@ router.get("/donations/mine", protect, async (req, res) => {
   }
 });
 
-// POST /api/community/requests
-// Accepts two formats:
-//   Web form  — sends requesterName/requesterEmail/barangay/address/category/itemDescription (no auth)
-//   Mobile    — sends JWT + resourceId/resourceName/quantity/requestType/urgent/gps (auth required)
-// Layer 1: one active request per category per requester email.
+// GET /api/community/pledges/mine (5.14)
+router.get("/pledges/mine", protect, async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const requests = await ResourceRequest.find({
+      pledges: { $elemMatch: { userId, status: { $ne: "withdrawn" } } },
+    }).sort({ createdAt: -1 }).lean();
+
+    const result = requests.map((r) => {
+      const myPledge = r.pledges.find(
+        (p) => p.userId.toString() === req.user.id && p.status !== "withdrawn",
+      );
+      return {
+        ...r,
+        myPledge: myPledge
+          ? { status: myPledge.status, message: myPledge.message, createdAt: myPledge.createdAt }
+          : null,
+      };
+    });
+
+    res.json({ success: true, requests: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/community/requests (5.2)
 router.post("/requests", optionalProtect, async (req, res) => {
   try {
     let {
       requesterName, requesterEmail, barangay, address, category,
       itemDescription, quantity, unit, reason,
-      // Mobile-only fields
       resourceId, resourceName, requestType, urgent, gpsLat, gpsLng, phone,
     } = req.body;
 
-    // Mobile: backfill identity from the authenticated user's profile
     if (req.user && (!requesterName || !requesterEmail)) {
       const profile = await User.findById(req.user.id).select("name email").lean();
       if (!profile) return res.status(404).json({ success: false, error: "User not found." });
@@ -122,10 +213,8 @@ router.post("/requests", optionalProtect, async (req, res) => {
       requesterEmail = requesterEmail || profile.email;
     }
 
-    // Map mobile resourceName → itemDescription when web field is absent
     if (!itemDescription && resourceName) itemDescription = resourceName;
 
-    // Defaults for fields mobile may not supply
     barangay = barangay || "unknown";
     address  = address  || "";
     category = category || "other";
@@ -134,16 +223,15 @@ router.post("/requests", optionalProtect, async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields." });
     }
 
-    // Layer 1 — one active request per category per requester
     const existingActive = await ResourceRequest.findOne({
       requesterEmail,
       category,
-      status: { $in: ["pending", "approved"] },
+      status: { $in: ["open", "pending", "approved", "matched"] },
     });
     if (existingActive) {
       return res.status(409).json({
         success: false,
-        error: `You already have an active ${category} request. It must be fulfilled or rejected before submitting another.`,
+        error: `You already have an active ${category} request. It must be fulfilled or cancelled before submitting another.`,
       });
     }
 
@@ -153,6 +241,7 @@ router.post("/requests", optionalProtect, async (req, res) => {
       quantity: Number(quantity),
       unit: unit || "pcs",
       reason: reason || "",
+      status: "open",
       userId:      req.user ? req.user.id : null,
       resourceId:  resourceId  || null,
       requestType: requestType || "standard",
@@ -167,7 +256,7 @@ router.post("/requests", optionalProtect, async (req, res) => {
 
     sendAdminNotification({
       title: `New Resource Request — ${category}`,
-      body: `${requesterName} from ${barangay} is requesting ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
+      body: `${requesterName} from ${barangay} needs ${quantity} ${unit || "pcs"} of ${itemDescription}.`,
       url: "/community",
       tag: `request-${request._id}`,
       urgent: urgent || false,
@@ -179,20 +268,164 @@ router.post("/requests", optionalProtect, async (req, res) => {
   }
 });
 
-// PATCH /api/community/requests/:id/approve
-router.patch("/requests/:id/approve", protect, requireAdminOrBarangay, async (req, res) => {
+// POST /api/community/requests/:id/pledge (5.6)
+router.post("/requests/:id/pledge", protect, async (req, res) => {
   try {
-    const { note } = req.body;
+    if (req.user.role !== "user") {
+      return res.status(403).json({ success: false, error: "Only residents can pledge to help." });
+    }
+
     const request = await ResourceRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
-    if (request.status !== "pending") return res.status(400).json({ success: false, error: "Only pending requests can be approved." });
 
-    request.status = "approved";
-    request.actionLog.push({ action: "approved", by: req.user.name, byId: req.user.id, note: note || "" });
+    if (request.userId?.toString() === req.user.id) {
+      return res.status(403).json({ success: false, error: "You cannot pledge on your own request." });
+    }
+
+    if (!["open", "pending", "approved"].includes(request.status)) {
+      return res.status(400).json({ success: false, error: "This request is not accepting pledges." });
+    }
+
+    const alreadyPledged = request.pledges.find(
+      (p) => p.userId.toString() === req.user.id && p.status !== "withdrawn",
+    );
+    if (alreadyPledged) {
+      return res.status(409).json({ success: false, error: "You already have an active pledge on this request." });
+    }
+
+    const { message, phone } = req.body;
+    const profile = await User.findById(req.user.id).select("name").lean();
+    const pledgerName = profile?.name || req.user.name || "Unknown";
+
+    request.pledges.push({ userId: req.user.id, name: pledgerName, phone: phone || null, message: message || "" });
+    await request.save();
+
+    const pledgeCount = request.pledges.filter((p) => p.status !== "withdrawn").length;
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user-${request.userId}`).emit("new_pledge", { requestId: request._id, pledgerName });
+      io.to("admin-room").emit("new_pledge", { requestId: request._id, pledgerName });
+    }
+
+    if (request.userId) {
+      sendPushToUser(request.userId, {
+        title: "Someone offered to help!",
+        body: `${pledgerName} can help with your ${request.itemDescription} request. Tap to review.`,
+        url: "/community",
+        tag: `pledge-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
+
+    res.status(201).json({ success: true, pledgeCount });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/community/requests/:id/pledge (5.7)
+router.delete("/requests/:id/pledge", protect, async (req, res) => {
+  try {
+    const request = await ResourceRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
+
+    const pledgeIdx = request.pledges.findIndex(
+      (p) => p.userId.toString() === req.user.id && p.status !== "withdrawn",
+    );
+    if (pledgeIdx === -1) {
+      return res.status(404).json({ success: false, error: "No active pledge from you on this request." });
+    }
+    if (request.pledges[pledgeIdx].status === "accepted") {
+      return res.status(400).json({ success: false, error: "Cannot withdraw an accepted pledge. Contact CDRRMO." });
+    }
+
+    request.pledges[pledgeIdx].status = "withdrawn";
     await request.save();
 
     const io = req.app.get("io");
     if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/community/requests/:id/accept-pledge (5.8)
+router.patch("/requests/:id/accept-pledge", protect, async (req, res) => {
+  try {
+    const request = await ResourceRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
+
+    if (request.userId?.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Only the requester can accept a pledge." });
+    }
+    if (!["open", "pending", "approved"].includes(request.status)) {
+      return res.status(400).json({ success: false, error: "This request is not in open status." });
+    }
+
+    const { pledgeId } = req.body;
+    if (!pledgeId) return res.status(400).json({ success: false, error: "pledgeId is required." });
+
+    const chosenPledge = request.pledges.id(pledgeId);
+    if (!chosenPledge) return res.status(404).json({ success: false, error: "Pledge not found." });
+    if (chosenPledge.status === "withdrawn") {
+      return res.status(400).json({ success: false, error: "The chosen pledge has been withdrawn." });
+    }
+    if (chosenPledge.status !== "pending") {
+      return res.status(400).json({ success: false, error: "This pledge is no longer pending." });
+    }
+
+    const declinedPledgers = [];
+    for (const p of request.pledges) {
+      if (p._id.toString() === pledgeId) {
+        p.status = "accepted";
+      } else if (p.status === "pending") {
+        p.status = "declined";
+        declinedPledgers.push(p);
+      }
+    }
+
+    request.matchedPledgerId = chosenPledge.userId;
+    request.status = "matched";
+    request.actionLog.push({
+      action: "matched",
+      by: req.user.name,
+      byId: req.user.id,
+      note: `Pledge accepted from ${chosenPledge.name}`,
+    });
+    await request.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user-${chosenPledge.userId}`).emit("pledge_accepted", {
+        requestId: request._id,
+        message: "Your offer was accepted! Check the chat to coordinate.",
+      });
+      for (const p of declinedPledgers) {
+        io.to(`user-${p.userId}`).emit("pledge_declined", { requestId: request._id });
+      }
+      io.emit("community_request_updated", { id: request._id, status: request.status });
+    }
+
+    sendPushToUser(chosenPledge.userId, {
+      title: "Your offer was accepted!",
+      body: `Coordinate with ${request.requesterName} in the chat to arrange delivery.`,
+      url: "/community",
+      tag: `message-${request._id}`,
+      urgent: false,
+    }).catch(() => {});
+
+    for (const p of declinedPledgers) {
+      sendPushToUser(p.userId, {
+        title: "Thank you for offering",
+        body: "Another helper was chosen for this request.",
+        url: "/community",
+        tag: `declined-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
 
     res.json({ success: true, request });
   } catch (err) {
@@ -200,22 +433,88 @@ router.patch("/requests/:id/approve", protect, requireAdminOrBarangay, async (re
   }
 });
 
-// PATCH /api/community/requests/:id/reject
-router.patch("/requests/:id/reject", protect, requireAdminOrBarangay, async (req, res) => {
+// PATCH /api/community/requests/:id/deliver (5.9)
+router.patch("/requests/:id/deliver", protect, async (req, res) => {
   try {
-    const { note } = req.body;
-    if (!note?.trim()) return res.status(400).json({ success: false, error: "A reason is required when rejecting a request." });
-
     const request = await ResourceRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
-    if (request.status !== "pending") return res.status(400).json({ success: false, error: "Only pending requests can be rejected." });
 
-    request.status = "rejected";
-    request.actionLog.push({ action: "rejected", by: req.user.name, byId: req.user.id, note });
+    if (request.matchedPledgerId?.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Only the assigned helper can mark this delivered." });
+    }
+    if (request.status !== "matched") {
+      return res.status(400).json({ success: false, error: "Request is not in matched status." });
+    }
+    if (request.deliveredAt) {
+      return res.status(400).json({ success: false, error: "Already marked as delivered." });
+    }
+
+    request.deliveredAt = new Date();
+    await request.save();
+
+    const io = req.app.get("io");
+    if (io) io.to(`user-${request.userId}`).emit("request_delivered", { requestId: request._id });
+
+    if (request.userId) {
+      const helperName = req.user.name || "Your helper";
+      sendPushToUser(request.userId, {
+        title: `${helperName} says delivered!`,
+        body: `Please confirm you received your ${request.itemDescription}.`,
+        url: "/community",
+        tag: `delivered-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/community/requests/:id/confirm (5.10)
+router.patch("/requests/:id/confirm", protect, async (req, res) => {
+  try {
+    const { note } = req.body;
+    const request = await ResourceRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
+
+    const isOwner = request.userId?.toString() === req.user.id;
+    const isAdmin = ["admin", "barangay_official"].includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: "Only the requester or admin can confirm receipt." });
+    }
+    if (request.status !== "matched") {
+      return res.status(400).json({ success: false, error: "Request must be in matched status to confirm." });
+    }
+
+    if (request.resourceId) {
+      const deducted = await InventoryItem.findOneAndUpdate(
+        { _id: request.resourceId, quantity: { $gte: request.quantity } },
+        { $inc: { quantity: -request.quantity } },
+        { new: true },
+      );
+      if (!deducted) {
+        return res.status(409).json({ success: false, error: "Insufficient stock to fulfill this request." });
+      }
+    }
+
+    request.status = "fulfilled";
+    request.actionLog.push({ action: "fulfilled", by: req.user.name, byId: req.user.id, note: note || "" });
     await request.save();
 
     const io = req.app.get("io");
     if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
+
+    if (request.matchedPledgerId) {
+      sendPushToUser(request.matchedPledgerId, {
+        title: "Request fulfilled!",
+        body: `Your delivery was confirmed! Thank you for helping.`,
+        url: "/community",
+        tag: `fulfilled-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
 
     res.json({ success: true, request });
   } catch (err) {
@@ -223,15 +522,16 @@ router.patch("/requests/:id/reject", protect, requireAdminOrBarangay, async (req
   }
 });
 
-// PATCH /api/community/requests/:id/fulfill
+// PATCH /api/community/requests/:id/fulfill — admin force-fulfill (5.11)
 router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
     const request = await ResourceRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
-    if (request.status !== "approved") return res.status(400).json({ success: false, error: "Only approved requests can be marked fulfilled." });
+    if (!["open", "pending", "approved", "matched"].includes(request.status)) {
+      return res.status(400).json({ success: false, error: "Cannot force-fulfill a request in its current state." });
+    }
 
-    // Atomic inventory deduction — runs only when request has a linked inventory item
     if (request.resourceId) {
       const deducted = await InventoryItem.findOneAndUpdate(
         { _id: request.resourceId, quantity: { $gte: request.quantity } },
@@ -256,14 +556,20 @@ router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (re
   }
 });
 
-// PATCH /api/community/requests/:id/cancel
+// PATCH /api/community/requests/:id/cancel (5.5)
 router.patch("/requests/:id/cancel", protect, async (req, res) => {
   try {
     const { note } = req.body;
     const request = await ResourceRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
-    if (!["pending", "approved"].includes(request.status)) {
-      return res.status(400).json({ success: false, error: "Cannot cancel a request that is already fulfilled or rejected." });
+
+    const isOwner = request.userId?.toString() === req.user.id;
+    const isAdmin = ["admin", "barangay_official"].includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: "You do not have permission to cancel this request." });
+    }
+    if (["fulfilled", "cancelled"].includes(request.status)) {
+      return res.status(400).json({ success: false, error: "Cannot cancel a request that is already fulfilled or cancelled." });
     }
 
     request.status = "cancelled";
@@ -274,6 +580,101 @@ router.patch("/requests/:id/cancel", protect, async (req, res) => {
     if (io) io.emit("community_request_updated", { id: request._id, status: request.status });
 
     res.json({ success: true, request });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/community/requests/:id/messages (5.12)
+router.get("/requests/:id/messages", protect, async (req, res) => {
+  try {
+    const request = await ResourceRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
+    if (!isParticipant(request, req.user.id, req.user.role)) {
+      return res.status(403).json({ success: false, error: "You are not a participant in this request." });
+    }
+
+    const messages = await ResourceMessage.find({ requestId: req.params.id })
+      .sort({ createdAt: 1 })
+      .lean();
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/community/requests/:id/messages (5.13)
+router.post("/requests/:id/messages", protect, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ success: false, error: "Message text is required." });
+    if (text.length > 1000) return res.status(400).json({ success: false, error: "Message too long (max 1000 characters)." });
+
+    const request = await ResourceRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
+    if (!isParticipant(request, req.user.id, req.user.role)) {
+      return res.status(403).json({ success: false, error: "You are not a participant in this request." });
+    }
+    if (request.status !== "matched") {
+      return res.status(400).json({ success: false, error: "Messages can only be sent on matched requests." });
+    }
+
+    const senderRole = ["admin", "barangay_official"].includes(req.user.role) ? req.user.role : "resident";
+    const message = await ResourceMessage.create({
+      requestId: req.params.id,
+      senderId:   req.user.id,
+      senderName: req.user.name,
+      senderRole,
+      text: text.trim(),
+    });
+
+    const io = req.app.get("io");
+    if (io) io.to(`request-${req.params.id}`).emit("new_message", { message });
+
+    // Notify the other participant(s)
+    const truncated = text.length > 60 ? text.slice(0, 57) + "..." : text;
+    const isRequester  = request.userId?.toString() === req.user.id;
+    const isPledger    = request.matchedPledgerId?.toString() === req.user.id;
+    const isAdminSend  = ["admin", "barangay_official"].includes(req.user.role);
+
+    if (isAdminSend) {
+      if (request.userId) {
+        sendPushToUser(request.userId, {
+          title: `New message from ${req.user.name}`,
+          body: truncated,
+          url: "/community",
+          tag: `message-${request._id}`,
+          urgent: false,
+        }).catch(() => {});
+      }
+      if (request.matchedPledgerId) {
+        sendPushToUser(request.matchedPledgerId, {
+          title: `New message from ${req.user.name}`,
+          body: truncated,
+          url: "/community",
+          tag: `message-${request._id}`,
+          urgent: false,
+        }).catch(() => {});
+      }
+    } else if (isRequester && request.matchedPledgerId) {
+      sendPushToUser(request.matchedPledgerId, {
+        title: `New message from ${req.user.name}`,
+        body: truncated,
+        url: "/community",
+        tag: `message-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    } else if (isPledger && request.userId) {
+      sendPushToUser(request.userId, {
+        title: `New message from ${req.user.name}`,
+        body: truncated,
+        url: "/community",
+        tag: `message-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
+
+    res.status(201).json({ success: true, message });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -291,19 +692,19 @@ router.get("/donations", protect, async (req, res) => {
   }
 });
 
-// POST /api/community/donations
-// Accepts two formats:
-//   Web form  — sends donorName/donorEmail/barangay/category/itemDescription (no auth)
-//   Mobile    — sends JWT + resourceId/resourceName/quantity/gps/phone (auth required)
+// POST /api/community/donations (5.16 — isOfficial field added)
 router.post("/donations", optionalProtect, async (req, res) => {
   try {
     let {
       donorName, donorEmail, barangay, category, itemDescription, quantity, unit,
-      // Mobile-only fields
       resourceId, resourceName, phone, dob, gpsLat, gpsLng, pickupAddress, isAnonymous,
+      isOfficial,
     } = req.body;
 
-    // Mobile: backfill identity from authenticated user (unless anonymous donation)
+    if (isOfficial && (!req.user || !["admin", "barangay_official"].includes(req.user.role))) {
+      return res.status(403).json({ success: false, error: "Only CDRRMO staff can post official supply offers." });
+    }
+
     if (req.user && (!donorName || !donorEmail)) {
       if (isAnonymous) {
         donorName  = "Anonymous";
@@ -317,10 +718,8 @@ router.post("/donations", optionalProtect, async (req, res) => {
       }
     }
 
-    // Map mobile resourceName → itemDescription when web field is absent
     if (!itemDescription && resourceName) itemDescription = resourceName;
 
-    // Defaults for fields mobile may not supply
     barangay = barangay || "unknown";
     category = category || "other";
 
@@ -341,6 +740,7 @@ router.post("/donations", optionalProtect, async (req, res) => {
       gpsLng:        gpsLng        ?? null,
       pickupAddress: pickupAddress || null,
       isAnonymous:   isAnonymous   || false,
+      isOfficial:    !!isOfficial,
     });
 
     const io = req.app.get("io");
@@ -360,14 +760,28 @@ router.post("/donations", optionalProtect, async (req, res) => {
   }
 });
 
-// PATCH /api/community/donations/:id/schedule
+// PATCH /api/community/donations/:id/schedule (5.17 — matchedRequestId field added)
 router.patch("/donations/:id/schedule", protect, requireAdminOrBarangay, async (req, res) => {
   try {
-    const { scheduledWindow, note } = req.body;
+    const { scheduledWindow, note, matchedRequestId } = req.body;
 
     const donation = await ResourceDonation.findById(req.params.id);
     if (!donation) return res.status(404).json({ success: false, error: "Donation not found." });
     if (donation.status !== "offered") return res.status(400).json({ success: false, error: "Only offered donations can be scheduled." });
+
+    if (matchedRequestId) {
+      if (!mongoose.Types.ObjectId.isValid(matchedRequestId)) {
+        return res.status(400).json({ success: false, error: "Invalid matchedRequestId." });
+      }
+      const linkedRequest = await ResourceRequest.findById(matchedRequestId).lean();
+      if (!linkedRequest) {
+        return res.status(400).json({ success: false, error: "Linked request not found." });
+      }
+      if (!["open", "pending", "approved", "matched"].includes(linkedRequest.status)) {
+        return res.status(400).json({ success: false, error: "Linked request is not in a valid status." });
+      }
+      donation.matchedRequestId = matchedRequestId;
+    }
 
     donation.status = "scheduled";
     donation.dropOffPoint = donation.barangay;
@@ -384,7 +798,7 @@ router.patch("/donations/:id/schedule", protect, requireAdminOrBarangay, async (
   }
 });
 
-// PATCH /api/community/donations/:id/receive
+// PATCH /api/community/donations/:id/receive (5.18 — unchanged)
 router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (req, res) => {
   try {
     const { note } = req.body;
@@ -401,9 +815,9 @@ router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (r
 
     // ── Auto-transfer to inventory ──────────────────────────────────────────
     try {
-      const donorLabel      = donation.donorName?.trim() || "Anonymous";
-      const inventoryCat    = DONATION_CATEGORY_MAP[donation.category] ?? "Other";
-      const nameRegex       = new RegExp(`^${escapeRegex(donation.itemDescription)}$`, "i");
+      const donorLabel   = donation.donorName?.trim() || "Anonymous";
+      const inventoryCat = DONATION_CATEGORY_MAP[donation.category] ?? "Other";
+      const nameRegex    = new RegExp(`^${escapeRegex(donation.itemDescription)}$`, "i");
 
       const existing = await InventoryItem.findOne({ barangay: donation.barangay, name: nameRegex });
 
@@ -450,7 +864,6 @@ router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (r
       }
     } catch (invErr) {
       console.error("[Community] Inventory transfer failed:", invErr.message);
-      // Non-fatal — donation was already marked received
     }
 
     res.json({ success: true, donation });
@@ -459,7 +872,7 @@ router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (r
   }
 });
 
-// PATCH /api/community/donations/:id/cancel
+// PATCH /api/community/donations/:id/cancel (5.19 — unchanged)
 router.patch("/donations/:id/cancel", protect, async (req, res) => {
   try {
     const { note } = req.body;

@@ -99,9 +99,22 @@ app.use("/uploads", express.static(join(dirname(fileURLToPath(import.meta.url)),
 
 // Socket.IO
 io.on("connection", (socket) => {
-  console.log("Admin connected:", socket.id);
+  console.log("Client connected:", socket.id);
+
+  socket.on("join", ({ userId }) => {
+    if (userId) socket.join(`user-${userId}`);
+  });
+
+  socket.on("join_admin", () => {
+    socket.join("admin-room");
+  });
+
+  socket.on("join_request", ({ requestId }) => {
+    if (requestId) socket.join(`request-${requestId}`);
+  });
+
   socket.on("disconnect", () => {
-    console.log("Admin disconnected:", socket.id);
+    console.log("Client disconnected:", socket.id);
   });
 });
 

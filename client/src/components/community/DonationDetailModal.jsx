@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import ModalShell from "../ui/ModalShell";
 import { API_BASE, authHeaders, formatDate, getStatusColor, getStatusDotColor } from "./helpers";
@@ -9,12 +9,27 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
   const [schedDate, setSchedDate] = useState("");
   const [schedTime, setSchedTime] = useState("");
   const [note,      setNote]      = useState("");
-  const [submitting,      setSubmitting]      = useState(false);
-  const [error,           setError]           = useState("");
-  const [showLog,         setShowLog]         = useState(false);
+  const [matchedRequestId, setMatchedRequestId] = useState("");
+  const [boardRequests,    setBoardRequests]    = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error,      setError]     = useState("");
+  const [showLog,    setShowLog]   = useState(false);
 
   const stored = localStorage.getItem("user");
-  const isAdmin = stored ? JSON.parse(stored).role === "admin" : false;
+  const isAdmin = stored ? ["admin", "barangay_official"].includes(JSON.parse(stored).role) : false;
+
+  // Fetch open requests from the board when schedule mode opens, to allow linking
+  useEffect(() => {
+    if (mode !== "schedule") return;
+    const barangay = don.barangay;
+    const qs = barangay ? `?barangay=${encodeURIComponent(barangay)}` : "";
+    fetch(`${API_BASE}/api/community/board${qs}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setBoardRequests(data.requests || []);
+      })
+      .catch(() => {});
+  }, [mode, don.barangay]);
 
   const handleSchedule = async () => {
     if (!schedDate) { setError("Please select a date."); return; }
@@ -23,10 +38,12 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
       : schedDate;
     setSubmitting(true); setError("");
     try {
+      const body = { scheduledWindow, note };
+      if (matchedRequestId) body.matchedRequestId = matchedRequestId;
       const res = await fetch(`${API_BASE}/api/community/donations/${don._id}/schedule`, {
         method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify({ scheduledWindow, note }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Action failed.");
@@ -48,7 +65,12 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
     } catch (err) { setError(err.message); setSubmitting(false); }
   };
 
-  const resetMode = () => { setMode(null); setSchedDate(""); setSchedTime(""); setNote(""); setError(""); };
+  const resetMode = () => {
+    setMode(null);
+    setSchedDate(""); setSchedTime(""); setNote("");
+    setMatchedRequestId(""); setBoardRequests([]);
+    setError("");
+  };
 
   if (showLog) return <LogModal item={don} onClose={() => setShowLog(false)} />;
 
@@ -61,13 +83,25 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
     <ModalShell onClose={onClose} size="xl">
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 capitalize">{don.category} Donation</h2>
+            <h2 className="text-xl font-bold text-gray-900 capitalize">
+              {don.category} Donation
+              {don.isOfficial && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 align-middle">
+                  CDRRMO Official
+                </span>
+              )}
+            </h2>
             <div className="flex items-center gap-2 mt-1">
               <div className={`w-2 h-2 rounded-full ${getStatusDotColor(don.status)}`} />
               <span className={`text-xs font-medium ${getStatusColor(don.status)}`}>
                 {don.status.charAt(0).toUpperCase() + don.status.slice(1)}
               </span>
               <span className="text-xs text-gray-400 font-mono">{don.referenceCode}</span>
+              {don.matchedRequestId && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-700">
+                  Linked to request
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -144,9 +178,7 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Time Window
-                </label>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Time Window</label>
                 <input
                   type="text"
                   value={schedTime}
@@ -155,6 +187,25 @@ export default function DonationDetailModal({ don, onClose, onRefresh }) {
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
                 />
               </div>
+              {boardRequests.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Link to Open Request <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <select
+                    value={matchedRequestId}
+                    onChange={(e) => setMatchedRequestId(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+                  >
+                    <option value="">— None —</option>
+                    {boardRequests.map((r) => (
+                      <option key={r._id} value={r._id}>
+                        {r.requesterName} · {r.itemDescription} ({r.quantity} {r.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
