@@ -530,10 +530,8 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
             : [...prev, report];
         });
       } else {
-        // resolved / rejected → remove from map immediately
-        setReports((prev) =>
-          prev.filter((r) => String(r._id) !== String(reportId)),
-        );
+        // resolved / rejected → refetch so the map is definitely in sync
+        fetchApprovedReports();
       }
     });
 
