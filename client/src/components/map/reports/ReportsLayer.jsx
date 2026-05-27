@@ -417,7 +417,7 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
 
   const fetchApprovedReports = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/reports/approved`);
+      const res = await fetch(`${API_BASE}/api/reports/approved`, { cache: "no-store" });
       const data = await res.json();
       if (data.success && data.reports) setReports(data.reports);
     } catch {}
@@ -428,6 +428,7 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
       const token = localStorage.getItem("token") ?? "";
       const res = await fetch(`${API_BASE}/api/alerts`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       const data = await res.json();
       const active = (data.alerts ?? []).filter(
@@ -518,7 +519,6 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
     socket.on("report_status_updated", ({ reportId, status, report }) => {
       if (status === "approved") {
         if (!report) {
-          // Server omitted the report object — refetch to stay in sync
           fetchApprovedReports();
           return;
         }
@@ -530,24 +530,30 @@ export default function ReportsLayer({ visible, filters = {}, showAlerts = true 
             : [...prev, report];
         });
       } else {
-        // resolved / rejected → refetch so the map is definitely in sync
+        // Optimistically remove then confirm via refetch
+        setReports((prev) => prev.filter((r) => String(r._id) !== String(reportId)));
         fetchApprovedReports();
       }
     });
 
     socket.on("new_alert", fetchAlerts);
-    socket.on("alert_updated", fetchAlerts);
+    socket.on("alert_updated", ({ id, isActive } = {}) => {
+      if (isActive === false && id) {
+        setAlerts((prev) => prev.filter((a) => String(a._id) !== String(id)));
+      }
+      fetchAlerts();
+    });
 
     const refreshInterval = setInterval(() => {
       fetchApprovedReports();
       fetchAlerts();
-    }, 120000);
+    }, 15000);
 
     return () => {
       socket.off("new_emergency_report");
       socket.off("report_status_updated");
       socket.off("new_alert", fetchAlerts);
-      socket.off("alert_updated", fetchAlerts);
+      socket.off("alert_updated");
       clearInterval(refreshInterval);
     };
   }, []);

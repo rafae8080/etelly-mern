@@ -278,6 +278,21 @@ app.post("/api/reports/resolve", protect, requireAdminOrBarangay, async (req, re
     if (result.modifiedCount > 0) {
       io.emit("report_updated", { reportId, status: "resolved" });
       io.emit("report_status_updated", { reportId, status: "resolved" });
+
+      // Dismiss any alert that was auto-created when this report was approved
+      try {
+        const linkedAlert = await Alert.findOneAndUpdate(
+          { linkedReportId: new mongoose.Types.ObjectId(reportId), isActive: true },
+          { $set: { isActive: false } },
+          { new: true },
+        );
+        if (linkedAlert) {
+          io.emit("alert_updated", { id: String(linkedAlert._id), isActive: false });
+        }
+      } catch (alertErr) {
+        console.error("[Resolve] Failed to dismiss linked alert:", alertErr.message);
+      }
+
       res.json({ success: true });
     } else {
       res.json({ success: false });
