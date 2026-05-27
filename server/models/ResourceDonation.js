@@ -44,15 +44,15 @@ const ResourceDonationSchema = new mongoose.Schema({
   isAnonymous:   { type: Boolean, default: false },
 }, { timestamps: true });
 
-// Generate reference code before saving if not set
-ResourceDonationSchema.pre("save", function (next) {
+// Generate reference code before saving if not set.
+// Uses no-callback form (Mongoose 9+ synchronous hook style).
+ResourceDonationSchema.pre("save", function () {
   if (!this.referenceCode) {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let code = "DON-";
     for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
     this.referenceCode = code;
   }
-  next();
 });
 
 export default mongoose.model("ResourceDonation", ResourceDonationSchema);
