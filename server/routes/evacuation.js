@@ -651,21 +651,26 @@ router.get("/centers", protect, async (req, res) => {
     const filter = barangay === "all" ? {} : { barangay };
     const centers = await EvacuationCenter.find(filter).sort({ barangay: 1, name: 1 });
 
-    // Populate lat/lng for any center that has null coordinates in the DB.
-    // Priority: exact name lookup → barangay-level fallback.
-    const withCoords = centers.map((c) => {
-      const obj = c.toObject();
-      if (obj.lat == null || obj.lng == null) {
-        const exact = CENTER_COORDS[`${obj.barangay}|${obj.name}`];
+    // Only return centers that are listed in CENTER_COORDS (the authoritative list
+    // from EvacuationCentersLayer.jsx), or that the admin manually gave coordinates.
+    // SEED-generated centers with no COORDS entry are excluded.
+    const withCoords = centers
+      .map((c) => {
+        const obj = c.toObject();
+        const key = `${obj.barangay}|${obj.name}`;
+        const exact = CENTER_COORDS[key];
         if (exact) {
-          [obj.lat, obj.lng] = exact;
-        } else {
-          const fb = BARANGAY_COORDS[obj.barangay];
-          if (fb) { obj.lat = fb.lat; obj.lng = fb.lng; }
+          // Always use the known precise coordinate (fills in null DB coords too)
+          if (obj.lat == null || obj.lng == null) {
+            [obj.lat, obj.lng] = exact;
+          }
+          return obj;
         }
-      }
-      return obj;
-    });
+        // No COORDS entry — only include if admin explicitly set coordinates
+        if (obj.lat != null && obj.lng != null) return obj;
+        return null;
+      })
+      .filter(Boolean);
 
     res.json(withCoords);
   } catch (err) {
