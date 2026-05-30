@@ -73,7 +73,7 @@ export default function AlertTile({ alert, onDismissRequest }) {
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-mono shrink-0">
           <Clock size={10} className="text-gray-300 flex-shrink-0" />
-          <span>{timeAgo(alert.createdAt)}</span>
+          <span>{timeAgo(alert.updatedAt ?? alert.createdAt)}</span>
           {until && until !== "expired" && (
             <span className={SEV_EXPIRY[alert.severity] ?? "text-gray-400"}>
               · expires {until}
