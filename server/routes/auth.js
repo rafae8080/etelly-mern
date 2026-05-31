@@ -9,48 +9,74 @@ import { initFirebase } from "../services/fcm.js";
 
 const router = express.Router();
 
-// POST /api/auth/login
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user)
-      return res
-        .status(400)
-        .json({ message: "Incorrect username or password" });
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res
-        .status(400)
-        .json({ message: "Incorrect username or password" });
+function signJwt(user) {
+  return jwt.sign(
+    { id: user._id, name: user.name, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" },
+  );
+}
 
-    const token = jwt.sign(
-      { id: user._id, name: user.name, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
+function userPayload(user) {
+  return {
+    id:                 user._id,
+    name:               user.name,
+    email:              user.email,
+    role:               user.role,
+    address:            user.address || "",
+    mustChangePassword: user.mustChangePassword ?? false,
+  };
+}
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        address: user.address || "",
-        mustChangePassword: user.mustChangePassword ?? false,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// POST /api/auth/register — citizen self-registration (role always "user")
+// ── POST /api/auth/register ───────────────────────────────────────────────────
+// Mobile citizen self-registration via Firebase.
+// Accepts a Firebase ID token (email may be unverified at this point — verification
+// is enforced at login time, not here). Also accepts legacy email+password for
+// any non-Firebase callers.
 router.post("/register", async (req, res) => {
-  const { name, email, password, address } = req.body;
+  const { idToken, name, address, email, password } = req.body;
 
+  // ── Firebase path (mobile) ──────────────────────────────────────────────────
+  if (idToken) {
+    if (!name?.trim()) {
+      return res.status(400).json({ message: "Name is required." });
+    }
+    try {
+      initFirebase();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const normalizedEmail = decoded.email?.toLowerCase();
+
+      if (!normalizedEmail) {
+        return res.status(400).json({ message: "Firebase account has no email address." });
+      }
+
+      const existing = await User.findOne({ email: normalizedEmail });
+      if (existing) {
+        return res.status(409).json({ message: "An account with this email already exists." });
+      }
+
+      await User.create({
+        name:    name.trim(),
+        email:   normalizedEmail,
+        role:    "user",
+        address: address?.trim() || "",
+      });
+
+      return res.status(202).json({
+        message: "Account created. Please verify your email before signing in.",
+      });
+    } catch (err) {
+      if (err.code?.startsWith("auth/")) {
+        return res.status(401).json({ message: "Invalid token. Please try again." });
+      }
+      console.error("[Auth] Firebase register error:", err.message);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+
+  // ── Legacy email+password path ──────────────────────────────────────────────
   if (!name?.trim() || !email?.trim() || !password) {
     return res.status(400).json({ message: "Name, email, and password are required." });
   }
@@ -66,55 +92,109 @@ router.post("/register", async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 12);
     const user   = await User.create({
-      name:  name.trim(),
-      email: email.trim().toLowerCase(),
+      name:     name.trim(),
+      email:    email.trim().toLowerCase(),
       password: hashed,
-      role: "user",
-      address: address?.trim() || "",
+      role:     "user",
+      address:  address?.trim() || "",
     });
 
-    const token = jwt.sign(
-      { id: user._id, name: user.name, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
-
-    res.status(201).json({
-      token,
-      user: {
-        id:    user._id,
-        name:  user.name,
-        email: user.email,
-        role:  user.role,
-        address: user.address || "",
-        mustChangePassword: false,
-      },
-    });
+    return res.status(201).json({ token: signJwt(user), user: userPayload(user) });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
-// GET /api/auth/me — returns current user's profile (used by mobile to refresh address)
+// ── POST /api/auth/login ──────────────────────────────────────────────────────
+// Accepts a Firebase ID token (mobile users) OR email+password (admin/legacy).
+router.post("/login", async (req, res) => {
+  const { idToken, email, password } = req.body;
+
+  // ── Firebase path ───────────────────────────────────────────────────────────
+  if (idToken) {
+    try {
+      initFirebase();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      if (!decoded.email_verified) {
+        return res.status(403).json({
+          message:          "Please verify your email before signing in.",
+          needsVerification: true,
+        });
+      }
+
+      const normalizedEmail = decoded.email?.toLowerCase();
+      const user = await User.findOne({ email: normalizedEmail });
+
+      if (!user) {
+        return res.status(404).json({ message: "No account found. Please sign up first." });
+      }
+
+      return res.json({ token: signJwt(user), user: userPayload(user) });
+    } catch (err) {
+      if (err.code?.startsWith("auth/")) {
+        return res.status(401).json({ message: "Invalid or expired session. Please sign in again." });
+      }
+      console.error("[Auth] Firebase login error:", err.message);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+
+  // ── Legacy email+password path (admin users / web portal) ──────────────────
+  if (email && password) {
+    try {
+      const user = await User.findOne({ email: email.trim().toLowerCase() });
+      if (!user) return res.status(400).json({ message: "Incorrect username or password" });
+
+      if (!user.password) {
+        return res.status(400).json({ message: "This account uses Google or email sign-in. Please use the mobile app." });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) return res.status(400).json({ message: "Incorrect username or password" });
+
+      return res.json({ token: signJwt(user), user: userPayload(user) });
+    } catch (err) {
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+
+  return res.status(400).json({ message: "idToken or email+password required." });
+});
+
+// ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get("/me", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      address: user.address || "",
-      mustChangePassword: user.mustChangePassword ?? false,
-    });
+    res.json(userPayload(user));
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// POST /api/auth/change-password
-// Authenticated — changes the caller's own password and clears mustChangePassword.
+// ── PATCH /api/auth/profile ───────────────────────────────────────────────────
+// Authenticated user updates their own address (used after Google sign-in profile completion).
+router.patch("/profile", protect, async (req, res) => {
+  const { address } = req.body;
+  if (!address?.trim()) {
+    return res.status(400).json({ message: "Address is required." });
+  }
+  try {
+    const updated = await User.findByIdAndUpdate(
+      req.user.id,
+      { address: address.trim() },
+      { new: true },
+    ).select("-password");
+    if (!updated) return res.status(404).json({ message: "User not found" });
+    res.json(userPayload(updated));
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ── POST /api/auth/change-password ───────────────────────────────────────────
+// Authenticated — changes the caller's own password (admin users only, bcrypt path).
 const STRONG_RE =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+[\]{};':"\\|,.<>/?`~]).{8,}$/;
 
@@ -131,7 +211,7 @@ router.post("/change-password", protect, async (req, res) => {
   try {
     const hashed = await bcrypt.hash(newPassword, 12);
     await User.findByIdAndUpdate(req.user.id, {
-      password: hashed,
+      password:           hashed,
       mustChangePassword: false,
     });
     res.json({ message: "Password changed successfully" });
@@ -140,9 +220,9 @@ router.post("/change-password", protect, async (req, res) => {
   }
 });
 
-// POST /api/auth/google — Firebase ID token exchange for Google Sign-In.
-// Mobile sends the Firebase ID token obtained after Google Sign-In.
-// Backend verifies it, creates the user if first-time login, returns a backend JWT.
+// ── POST /api/auth/google ─────────────────────────────────────────────────────
+// Firebase ID token exchange for Google Sign-In.
+// Returns isNewUser: true when an account was just created.
 router.post("/google", async (req, res) => {
   const { idToken } = req.body;
   if (!idToken) {
@@ -160,10 +240,9 @@ router.post("/google", async (req, res) => {
 
     const normalizedEmail = email.toLowerCase();
     let user = await User.findOne({ email: normalizedEmail });
+    const isNewUser = !user;
 
     if (!user) {
-      // First-time Google login — create account with a random placeholder password.
-      // Google users never use email/password login so this value is never compared.
       user = await User.create({
         name:     name || normalizedEmail.split("@")[0],
         email:    normalizedEmail,
@@ -172,21 +251,10 @@ router.post("/google", async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { id: user._id, name: user.name, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
-
     res.json({
-      token,
-      user: {
-        id:                 user._id,
-        name:               user.name,
-        email:              user.email,
-        role:               user.role,
-        mustChangePassword: user.mustChangePassword ?? false,
-      },
+      token:     signJwt(user),
+      user:      userPayload(user),
+      isNewUser,
     });
   } catch (err) {
     console.error("[Auth] Google verify failed:", err.message);
