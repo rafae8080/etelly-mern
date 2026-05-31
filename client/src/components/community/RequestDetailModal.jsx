@@ -141,9 +141,9 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
   if (showLog) return <LogModal item={req} onClose={() => setShowLog(false)} />;
 
   return (
-    <ModalShell onClose={onClose} size="xl">
+    <ModalShell onClose={onClose} size="xl" flex>
       {/* Header */}
-      <div className="flex items-start justify-between p-6 border-b border-gray-200">
+      <div className="shrink-0 flex items-start justify-between p-6 border-b border-gray-200">
         <div>
           <h2 className="text-xl font-bold text-gray-900 capitalize">{req.category} Request</h2>
           <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium">
@@ -158,7 +158,7 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
         </button>
       </div>
 
-      <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+      <div className="flex-1 min-h-0 p-6 space-y-4 overflow-y-auto">
         {/* Request info */}
         <div>
           <p className="text-sm font-medium text-gray-700">Requester</p>
@@ -326,7 +326,7 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
       </div>
 
       {/* Footer actions */}
-      <div className="p-6 border-t border-gray-200 space-y-3">
+      <div className="shrink-0 p-6 border-t border-gray-200 space-y-3">
         {isAdmin && (
           <button
             onClick={() => setShowLog(true)}
