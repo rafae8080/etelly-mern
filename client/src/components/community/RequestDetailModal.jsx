@@ -337,19 +337,29 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
         )}
 
         {canAct && !action && (
-          <div className="flex gap-3">
-            <button
-              onClick={() => setAction("cancel")}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-600 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm"
-            >
-              Cancel Request
-            </button>
-            <button
-              onClick={() => setAction("fulfill")}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              Force Fulfill
-            </button>
+          <div className="space-y-3">
+            {req.status === "matched" && (
+              <button
+                onClick={() => setAction("release")}
+                className="w-full px-4 py-2 border border-amber-400 text-amber-700 font-semibold rounded-lg hover:bg-amber-50 transition-colors text-sm"
+              >
+                Release Match (helper backed out)
+              </button>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setAction("cancel")}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-600 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Cancel Request
+              </button>
+              <button
+                onClick={() => setAction("fulfill")}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                Force Fulfill
+              </button>
+            </div>
           </div>
         )}
 
@@ -365,7 +375,11 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
               onClick={handleAction}
               disabled={submitting}
               className={`flex-1 px-4 py-2 font-semibold rounded-lg text-white transition-colors text-sm disabled:opacity-50
-                ${action === "fulfill" ? "bg-blue-600 hover:bg-blue-700" : "bg-red-600 hover:bg-red-700"}`}
+                ${action === "fulfill"
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : action === "release"
+                  ? "bg-amber-500 hover:bg-amber-600"
+                  : "bg-red-600 hover:bg-red-700"}`}
             >
               {submitting
                 ? "Saving…"

@@ -281,7 +281,7 @@ export default function DashboardPage() {
                         {alert.title}
                       </p>
                       <p className="text-[11px] text-gray-400 mt-0.5 font-mono capitalize">
-                        {alert.type} · {timeAgo(alert.createdAt)}
+                        {alert.type} · {timeAgo(alert.updatedAt ?? alert.createdAt)}
                       </p>
                     </div>
                   </div>

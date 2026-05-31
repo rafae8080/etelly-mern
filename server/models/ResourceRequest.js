@@ -10,7 +10,7 @@ const pledgeSchema = new mongoose.Schema({
 }, { _id: true });
 
 const actionLogSchema = new mongoose.Schema({
-  action:  { type: String, enum: ["approved","matched","rejected","fulfilled","cancelled"] },
+  action:  { type: String, enum: ["approved","matched","released","rejected","fulfilled","cancelled"] },
   by:      { type: String, required: true },
   byId:    { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   note:    { type: String, default: "" },

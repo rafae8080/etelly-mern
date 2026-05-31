@@ -52,10 +52,9 @@ function calcPriority(barangay, activeAlerts) {
   if (!matching.length) return { level: "normal", score: 0 };
 
   const score = Math.max(...matching.map((a) => SEVERITY_SCORE[a.severity] ?? 0));
-  let level = "medium";
-  if (score >= 4) level = "critical";
-  else if (score >= 3) level = "high";
-  else if (score >= 2) level = "high";
+  let level = "medium";                  // warning (2) or watch (1)
+  if (score >= 4) level = "critical";    // evacuate
+  else if (score >= 3) level = "high";   // critical
 
   return { level, score };
 }
@@ -346,20 +345,22 @@ router.delete("/requests/:id/pledge", protect, async (req, res) => {
 // PATCH /api/community/requests/:id/accept-pledge (5.8)
 router.patch("/requests/:id/accept-pledge", protect, async (req, res) => {
   try {
-    const request = await ResourceRequest.findById(req.params.id);
-    if (!request) return res.status(404).json({ success: false, error: "Request not found." });
-
-    if (request.userId?.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, error: "Only the requester can accept a pledge." });
-    }
-    if (!["open", "pending", "approved"].includes(request.status)) {
-      return res.status(400).json({ success: false, error: "This request is not in open status." });
-    }
-
     const { pledgeId } = req.body;
     if (!pledgeId) return res.status(400).json({ success: false, error: "pledgeId is required." });
 
-    const chosenPledge = request.pledges.id(pledgeId);
+    // Read first for ownership/validation and to capture the pledger's immutable
+    // identity (userId, name). The actual state change is applied atomically below.
+    const existing = await ResourceRequest.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, error: "Request not found." });
+
+    if (existing.userId?.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Only the requester can accept a pledge." });
+    }
+    if (!["open", "pending", "approved"].includes(existing.status)) {
+      return res.status(400).json({ success: false, error: "This request is not in open status." });
+    }
+
+    const chosenPledge = existing.pledges.id(pledgeId);
     if (!chosenPledge) return res.status(404).json({ success: false, error: "Pledge not found." });
     if (chosenPledge.status === "withdrawn") {
       return res.status(400).json({ success: false, error: "The chosen pledge has been withdrawn." });
@@ -368,25 +369,54 @@ router.patch("/requests/:id/accept-pledge", protect, async (req, res) => {
       return res.status(400).json({ success: false, error: "This pledge is no longer pending." });
     }
 
-    const declinedPledgers = [];
-    for (const p of request.pledges) {
-      if (p._id.toString() === pledgeId) {
-        p.status = "accepted";
-      } else if (p.status === "pending") {
-        p.status = "declined";
-        declinedPledgers.push(p);
-      }
+    // Atomic claim: only succeeds if the request is still open and the chosen
+    // pledge is still pending. A concurrent accept on the same request will find
+    // the status already "matched" and fail the filter, returning null.
+    const request = await ResourceRequest.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        userId: req.user.id,
+        status: { $in: ["open", "pending", "approved"] },
+        pledges: { $elemMatch: { _id: pledgeId, status: "pending" } },
+      },
+      {
+        $set: {
+          "pledges.$.status": "accepted",
+          matchedPledgerId: chosenPledge.userId,
+          status: "matched",
+        },
+        $push: {
+          actionLog: {
+            action: "matched",
+            by: req.user.name,
+            byId: req.user.id,
+            note: `Pledge accepted from ${chosenPledge.name}`,
+          },
+        },
+      },
+      { new: true },
+    );
+    if (!request) {
+      return res.status(409).json({
+        success: false,
+        error: "This request was just matched or is no longer accepting pledges.",
+      });
     }
 
-    request.matchedPledgerId = chosenPledge.userId;
-    request.status = "matched";
-    request.actionLog.push({
-      action: "matched",
-      by: req.user.name,
-      byId: req.user.id,
-      note: `Pledge accepted from ${chosenPledge.name}`,
-    });
-    await request.save();
+    // Decline the remaining pending pledges in a single targeted update.
+    const otherPendingIds = request.pledges
+      .filter((p) => p._id.toString() !== pledgeId && p.status === "pending")
+      .map((p) => p._id);
+    const declinedPledgers = request.pledges.filter((p) =>
+      otherPendingIds.some((id) => id.equals(p._id)),
+    );
+    if (otherPendingIds.length) {
+      await ResourceRequest.updateOne(
+        { _id: request._id },
+        { $set: { "pledges.$[d].status": "declined" } },
+        { arrayFilters: [{ "d._id": { $in: otherPendingIds } }] },
+      );
+    }
 
     const io = req.app.get("io");
     if (io) {
@@ -414,6 +444,64 @@ router.patch("/requests/:id/accept-pledge", protect, async (req, res) => {
         body: "Another helper was chosen for this request.",
         url: "/community",
         tag: `declined-${request._id}`,
+        urgent: false,
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, request });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/community/requests/:id/release — revert a matched request to open
+// when the assigned helper backs out. Requester or CDRRMO only; blocked once the
+// helper has marked delivery, to avoid losing an in-progress hand-off.
+router.patch("/requests/:id/release", protect, async (req, res) => {
+  try {
+    const { note } = req.body;
+    const existing = await ResourceRequest.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, error: "Request not found." });
+
+    const isOwner = existing.userId?.toString() === req.user.id;
+    const isAdmin = ["admin", "barangay_official"].includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: "Only the requester or CDRRMO can release this match." });
+    }
+    if (existing.status !== "matched") {
+      return res.status(400).json({ success: false, error: "Only a matched request can be released." });
+    }
+    if (existing.deliveredAt) {
+      return res.status(400).json({ success: false, error: "Cannot release — the helper already marked this delivered. Confirm receipt or contact CDRRMO." });
+    }
+
+    const releasedPledgerId = existing.matchedPledgerId;
+
+    // Atomic guard: only release if still matched and not yet delivered.
+    const request = await ResourceRequest.findOneAndUpdate(
+      { _id: req.params.id, status: "matched", deliveredAt: null },
+      {
+        $set: { status: "open", matchedPledgerId: null, "pledges.$[acc].status": "withdrawn" },
+        $push: { actionLog: { action: "released", by: req.user.name, byId: req.user.id, note: note || "" } },
+      },
+      { arrayFilters: [{ "acc.status": "accepted" }], new: true },
+    );
+    if (!request) {
+      return res.status(409).json({ success: false, error: "This request is no longer in a matched state." });
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("community_request_updated", { id: request._id, status: request.status });
+      if (releasedPledgerId) io.to(`user-${releasedPledgerId}`).emit("pledge_declined", { requestId: request._id });
+    }
+
+    if (releasedPledgerId) {
+      sendPushToUser(releasedPledgerId, {
+        title: "Match released",
+        body: `Your match for "${request.itemDescription}" was released. The request is open again.`,
+        url: "/community",
+        tag: `released-${request._id}`,
         urgent: false,
       }).catch(() => {});
     }
@@ -479,7 +567,7 @@ router.patch("/requests/:id/confirm", protect, async (req, res) => {
       return res.status(400).json({ success: false, error: "Request must be in matched status to confirm." });
     }
 
-    if (request.resourceId) {
+    if (request.resourceId && mongoose.Types.ObjectId.isValid(request.resourceId)) {
       const deducted = await InventoryItem.findOneAndUpdate(
         { _id: request.resourceId, quantity: { $gte: request.quantity } },
         { $inc: { quantity: -request.quantity } },
@@ -523,7 +611,7 @@ router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (re
       return res.status(400).json({ success: false, error: "Cannot force-fulfill a request in its current state." });
     }
 
-    if (request.resourceId) {
+    if (request.resourceId && mongoose.Types.ObjectId.isValid(request.resourceId)) {
       const deducted = await InventoryItem.findOneAndUpdate(
         { _id: request.resourceId, quantity: { $gte: request.quantity } },
         { $inc: { quantity: -request.quantity } },
