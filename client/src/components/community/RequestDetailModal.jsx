@@ -3,7 +3,7 @@ import { X, AlertTriangle, Send } from "lucide-react";
 import ModalShell from "../ui/ModalShell";
 import { API_BASE, authHeaders, formatDate, getStatusColor, getStatusDotColor } from "./helpers";
 import LogModal from "./LogModal";
-import { getSocket } from "../../utils/socket";
+import { connectSocket } from "../../utils/socket";
 
 const PLEDGE_BADGE = {
   pending:  "bg-gray-100 text-gray-600",
@@ -58,20 +58,28 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
 
     loadMessages();
 
-    // Join the request's Socket.IO room to receive live messages
-    const socket = getSocket();
-    if (socket) {
-      socket.emit("join_request", { requestId: req._id });
-      const handler = (data) => {
-        setMessages((prev) => {
-          // Avoid duplicate messages if we also appended locally on send
-          if (prev.some((m) => m._id === data.message._id)) return prev;
-          return [...prev, data.message];
-        });
-      };
-      socket.on("new_message", handler);
-      return () => socket.off("new_message", handler);
-    }
+    // Join the request's Socket.IO room to receive live messages. Use
+    // connectSocket() (not getSocket()) so a connection is guaranteed even when
+    // the admin opened the Community page directly and no other page has
+    // established the socket yet — otherwise messages only appear on refresh.
+    const socket = connectSocket();
+    const joinRoom = () => socket.emit("join_request", { requestId: req._id });
+    joinRoom();
+    // Re-join on every (re)connect so live messages keep flowing after a drop.
+    socket.on("connect", joinRoom);
+
+    const handler = (data) => {
+      setMessages((prev) => {
+        // Avoid duplicate messages if we also appended locally on send
+        if (prev.some((m) => m._id === data.message._id)) return prev;
+        return [...prev, data.message];
+      });
+    };
+    socket.on("new_message", handler);
+    return () => {
+      socket.off("new_message", handler);
+      socket.off("connect", joinRoom);
+    };
   }, [req._id]);
 
   // Scroll to bottom when messages update
