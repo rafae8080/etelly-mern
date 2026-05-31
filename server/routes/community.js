@@ -85,6 +85,9 @@ router.get("/board", optionalProtect, async (req, res) => {
         _id: r._id,
         requesterName: anonymizeName(r.requesterName),
         barangay: r.barangay,
+        address: r.address,
+        gpsLat: r.gpsLat,
+        gpsLng: r.gpsLng,
         category: r.category,
         itemDescription: r.itemDescription,
         quantity: r.quantity,
@@ -221,18 +224,6 @@ router.post("/requests", optionalProtect, async (req, res) => {
 
     if (!requesterName || !requesterEmail || !itemDescription || !quantity) {
       return res.status(400).json({ success: false, error: "Missing required fields." });
-    }
-
-    const existingActive = await ResourceRequest.findOne({
-      requesterEmail,
-      category,
-      status: { $in: ["open", "pending", "approved", "matched"] },
-    });
-    if (existingActive) {
-      return res.status(409).json({
-        success: false,
-        error: `You already have an active ${category} request. It must be fulfilled or cancelled before submitting another.`,
-      });
     }
 
     const request = await ResourceRequest.create({

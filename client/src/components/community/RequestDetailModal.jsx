@@ -114,7 +114,14 @@ export default function RequestDetailModal({ req, onClose, onRefresh }) {
       );
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to send.");
-      setMessages((prev) => [...prev, data.message]);
+      // The message may already be in state from the Socket.IO "new_message"
+      // broadcast (which can arrive before this HTTP response). Dedup by _id
+      // so the admin's own message isn't appended twice.
+      setMessages((prev) =>
+        prev.some((m) => m._id === data.message._id)
+          ? prev
+          : [...prev, data.message]
+      );
       setMsgText("");
     } catch (err) {
       setMsgError(err.message);
