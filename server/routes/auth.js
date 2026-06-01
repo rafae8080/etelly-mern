@@ -36,12 +36,15 @@ function userPayload(user) {
 // is enforced at login time, not here). Also accepts legacy email+password for
 // any non-Firebase callers.
 router.post("/register", async (req, res) => {
-  const { idToken, name, address, email, password } = req.body;
+  const { idToken, name, address, email, password, termsAccepted, termsVersion } = req.body;
 
   // ── Firebase path (mobile) ──────────────────────────────────────────────────
   if (idToken) {
     if (!name?.trim()) {
       return res.status(400).json({ message: "Name is required." });
+    }
+    if (termsAccepted !== true) {
+      return res.status(400).json({ message: "You must accept the Terms & Conditions and Privacy Policy." });
     }
     try {
       initFirebase();
@@ -62,6 +65,9 @@ router.post("/register", async (req, res) => {
         email:   normalizedEmail,
         role:    "user",
         address: address?.trim() || "",
+        termsAccepted:        true,
+        termsAcceptedAt:      new Date(),
+        termsAcceptedVersion: termsVersion || "",
       });
 
       return res.status(202).json({
@@ -176,14 +182,20 @@ router.get("/me", protect, async (req, res) => {
 // ── PATCH /api/auth/profile ───────────────────────────────────────────────────
 // Authenticated user updates their own address (used after Google sign-in profile completion).
 router.patch("/profile", protect, async (req, res) => {
-  const { address } = req.body;
+  const { address, termsAccepted, termsVersion } = req.body;
   if (!address?.trim()) {
     return res.status(400).json({ message: "Address is required." });
   }
   try {
+    const update = { address: address.trim() };
+    if (termsAccepted === true) {
+      update.termsAccepted        = true;
+      update.termsAcceptedAt      = new Date();
+      update.termsAcceptedVersion = termsVersion || "";
+    }
     const updated = await User.findByIdAndUpdate(
       req.user.id,
-      { address: address.trim() },
+      update,
       { new: true },
     ).select("-password");
     if (!updated) return res.status(404).json({ message: "User not found" });

@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema(
     mustChangePassword: { type: Boolean, default: false },
     contactEmail: { type: String, default: "" },
     address: { type: String, default: "" },
+    termsAccepted: { type: Boolean, default: false },
+    termsAcceptedAt: { type: Date, default: null },
+    termsAcceptedVersion: { type: String, default: "" },
   },
   { timestamps: true },
 );

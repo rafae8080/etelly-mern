@@ -104,6 +104,7 @@ export const SEVERITY_CONFIG = {
     border: "border-red-600",
     leftBorder: "border-red-600",
     icon: "🚨",
+    description: "Leave now. It is dangerous to stay. Go to the nearest evacuation center right away.",
   },
   critical: {
     label: "Critical",
@@ -120,6 +121,7 @@ export const SEVERITY_CONFIG = {
     border: "border-amber-300",
     leftBorder: "border-amber-500",
     icon: "⚡",
+    description: "Get ready. A hazard is happening or about to happen. Prepare to act.",
   },
   watch: {
     label: "Watch",
@@ -128,6 +130,7 @@ export const SEVERITY_CONFIG = {
     border: "border-blue-200",
     leftBorder: "border-blue-400",
     icon: "👁",
+    description: "Be alert. A hazard might happen. Stay updated — no need to move yet.",
   },
 };
 
