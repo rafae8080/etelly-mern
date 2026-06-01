@@ -10,7 +10,6 @@ export default function FilterTabs({ activeFilter, onFilterChange, counts }) {
   return (
     <div className="flex gap-1.5 mb-4 flex-shrink-0 overflow-x-auto scrollbar-none pb-0.5">
       {FILTER_TABS.map((tab) => {
-        const count = tab.key === "all" ? counts.total : (counts[tab.key] ?? 0);
         const isActive = activeFilter === tab.key;
 
         return (

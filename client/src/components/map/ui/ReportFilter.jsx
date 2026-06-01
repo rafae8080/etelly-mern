@@ -1,4 +1,3 @@
-// client/src/components/map/ui/ReportFilter.jsx
 import { useState } from "react";
 import {
   Filter,

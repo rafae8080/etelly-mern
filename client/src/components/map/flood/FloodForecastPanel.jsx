@@ -212,7 +212,7 @@ const FloodForecastPanel = ({
           .filter((a) => a.type === "flood" && a.isActive)
           .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99));
         if (!cancelled) setAllAlerts(flood);
-      } catch (_) {
+      } catch {
         // silent — show last loaded list
       } finally {
         if (!cancelled) setAlertsLoading(false);

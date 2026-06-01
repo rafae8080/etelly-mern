@@ -1,4 +1,3 @@
-// client/src/components/map/earthquake/EarthquakeLayer.jsx
 import { useEffect, useState } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
@@ -80,8 +79,6 @@ document.head.appendChild(style);
 export default function EarthquakeLayer({ visible, filters = {}, refreshTrigger }) {
   const map = useMap();
   const [earthquakes, setEarthquakes] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [markersLayer, setMarkersLayer] = useState(null);
 
   // USGS API endpoint for past 30 days, magnitude 2.5+
@@ -91,7 +88,6 @@ export default function EarthquakeLayer({ visible, filters = {}, refreshTrigger 
   // Fetch earthquake data from USGS
   const fetchEarthquakeData = async () => {
     try {
-      setLoading(true);
 
       // filters.starttime is the ISO date computed by EarthquakePanel when the
       // user picks a time range. filters.timeRange ("day"/"week"/"month") is a
@@ -140,11 +136,8 @@ export default function EarthquakeLayer({ visible, filters = {}, refreshTrigger 
       const data = await response.json();
 
       setEarthquakes(data.features || []);
-      setLastUpdated(new Date());
     } catch (error) {
       console.error("[EarthquakeLayer] USGS fetch error:", error);
-    } finally {
-      setLoading(false);
     }
   };
 

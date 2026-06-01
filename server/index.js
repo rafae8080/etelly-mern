@@ -18,9 +18,9 @@ import inventoryRoutes from "./routes/inventory.js";
 import syncRoutes from "./routes/sync.js";
 import uploadImagesRoutes from "./routes/uploadImages.js";
 import { startAlertEngine } from "./scripts/alertEngine.js";
-import { syncReports, startSyncScheduler } from "./scripts/syncToCloud.js";
+import { startSyncScheduler } from "./scripts/syncToCloud.js";
 import Alert from "./models/Alert.js";
-import { protect, requireAdmin, requireAdminOrBarangay } from "./middleware/auth.js";
+import { protect, requireAdminOrBarangay } from "./middleware/auth.js";
 import rateLimit from "express-rate-limit";
 
 dotenv.config();

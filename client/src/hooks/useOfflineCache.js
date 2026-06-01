@@ -145,7 +145,7 @@ export const useOfflineCache = (
 
         // Persist to IndexedDB for next offline session
         await idbSet(cacheKey, fresh);
-      } catch (err) {
+      } catch {
         // Network failed — fall back to IndexedDB if not already shown
         try {
           const cached = await idbGet(cacheKey);

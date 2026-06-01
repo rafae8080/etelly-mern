@@ -173,7 +173,7 @@ export default function App() {
           path="/safety-tips/:slug"
           element={<ProtectedLayout Page={SafetyTipDetailPage} />}
         />
-<Route
+        <Route
           path="/manage-users"
           element={<ProtectedLayout Page={ManageUsersPage} />}
         />

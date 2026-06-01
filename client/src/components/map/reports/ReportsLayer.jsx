@@ -1,4 +1,3 @@
-// client/src/components/map/reports/ReportsLayer.jsx
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";

@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   Phone,
+  WifiOff,
 } from "lucide-react";
 import ModalShell from "../components/ui/ModalShell";
 import { connectSocket } from "../utils/socket";
@@ -158,6 +159,34 @@ async function apiFetch(path, opts = {}) {
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+// ── Offline cache (per-barangay) ──────────────────────────────────────────────
+// The centers payload is small, so a synchronous localStorage cache keeps the
+// existing optimistic/socket flow simple while still serving data offline.
+const cacheKeyFor = (brgy) => `evac-centers:${brgy}`;
+
+function readCenterCache(brgy) {
+  try {
+    const raw = localStorage.getItem(cacheKeyFor(brgy));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.data)) return null;
+    return parsed; // { data, cachedAt }
+  } catch {
+    return null;
+  }
+}
+
+function writeCenterCache(brgy, data) {
+  try {
+    localStorage.setItem(
+      cacheKeyFor(brgy),
+      JSON.stringify({ data, cachedAt: Date.now() }),
+    );
+  } catch {
+    // storage full / unavailable — non-critical
+  }
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -462,6 +491,8 @@ export default function EvacuationPage() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [cachedAt, setCachedAt] = useState(null);
   const [editId, setEditId] = useState(null);
   const [inputId, setInputId] = useState(null);
   const [inputVal, setInputVal] = useState("");
@@ -477,8 +508,20 @@ export default function EvacuationPage() {
     try {
       const data = await apiFetch(`/api/evacuation/centers?barangay=${brgy}`);
       setCenters(data);
+      writeCenterCache(brgy, data);
+      setIsOffline(false);
+      setCachedAt(Date.now());
     } catch {
-      setError("Failed to load evacuation centers. Check your connection.");
+      // Network failed — fall back to cached centers if we have them.
+      const cached = readCenterCache(brgy);
+      if (cached) {
+        setCenters(cached.data);
+        setCachedAt(cached.cachedAt);
+        setIsOffline(true);
+        setError(null);
+      } else {
+        setError("Failed to load evacuation centers. Check your connection.");
+      }
     } finally {
       setLoading(false);
     }
@@ -517,8 +560,26 @@ export default function EvacuationPage() {
     return () => socket.off("evacuation_updated", onUpdate);
   }, [barangay]);
 
+  // ── Online / offline status ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      fetchCenters(barangay);
+      fetchLogs(barangay);
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [barangay, fetchCenters, fetchLogs]);
+
   // ── Occupancy adjustment ────────────────────────────────────────────────────
   async function adjust(id, delta) {
+    if (isOffline) return;
     const c = centers.find((x) => x._id === id);
     if (!c) return;
     const next = Math.max(0, Math.min(c.capacity, c.occupancy + delta));
@@ -545,6 +606,11 @@ export default function EvacuationPage() {
   }
 
   async function commitInput(id) {
+    if (isOffline) {
+      setInputId(null);
+      setInputVal("");
+      return;
+    }
     const n = parseInt(inputVal, 10);
     if (!isNaN(n)) {
       const c = centers.find((x) => x._id === id);
@@ -569,6 +635,7 @@ export default function EvacuationPage() {
   }
 
   async function handleSaveCapacity(id, capacity) {
+    if (isOffline) return;
     try {
       await apiFetch(`/api/evacuation/centers/${id}/capacity`, {
         method: "PUT",
@@ -582,6 +649,7 @@ export default function EvacuationPage() {
   }
 
   async function handleReset(id) {
+    if (isOffline) return;
     try {
       await apiFetch(`/api/evacuation/centers/${id}/reset`, { method: "POST" });
       fetchLogs(barangay);
@@ -592,6 +660,7 @@ export default function EvacuationPage() {
   }
 
   async function handleToggleAvailability(id, available) {
+    if (isOffline) return;
     setCenters((prev) =>
       prev.map((x) => (x._id === id ? { ...x, available } : x)),
     );
@@ -607,6 +676,7 @@ export default function EvacuationPage() {
   }
 
   async function handleCreateCenter(data) {
+    if (isOffline) return;
     const center = await apiFetch("/api/evacuation/centers", {
       method: "POST",
       body: JSON.stringify(data),
@@ -663,7 +733,8 @@ export default function EvacuationPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCreateOpen(true)}
-                className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors"
+                disabled={isOffline}
+                className="flex items-center gap-1.5 bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={14} />
                 Add Center
@@ -728,6 +799,18 @@ export default function EvacuationPage() {
         </div>
       </div>
 
+      {/* Offline banner */}
+      {isOffline && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <WifiOff size={15} className="shrink-0" />
+          <span className="flex-1">
+            Offline — showing cached evacuation centers
+            {cachedAt ? ` (last updated ${fmtTime(cachedAt)})` : ""}. Editing is
+            disabled until you reconnect.
+          </span>
+        </div>
+      )}
+
       {/* Summary bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -772,13 +855,9 @@ export default function EvacuationPage() {
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               {hotlines.map((h) => (
-                <a
-                  key={h}
-                  href={`tel:${h.replace(/[-\s]/g, "")}`}
-                  className="text-xs font-medium text-red-600 hover:text-red-800 transition-colors"
-                >
+                <span key={h} className="text-xs font-medium text-red-600">
                   {h}
-                </a>
+                </span>
               ))}
             </div>
           </div>
@@ -855,7 +934,8 @@ export default function EvacuationPage() {
                         )}
                         <button
                           onClick={() => setEditId(c._id)}
-                          className="text-gray-300 hover:text-gray-500 transition-colors"
+                          disabled={isOffline}
+                          className="text-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Settings size={15} />
                         </button>
@@ -886,7 +966,7 @@ export default function EvacuationPage() {
 
                         <button
                           onClick={() => adjust(c._id, -1)}
-                          disabled={c.occupancy <= 0}
+                          disabled={isOffline || c.occupancy <= 0}
                           className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors leading-none"
                         >
                           −
@@ -929,8 +1009,13 @@ export default function EvacuationPage() {
                         ) : (
                           <button
                             onClick={() => openInput(c._id, c.occupancy)}
-                            title="Click to type a number"
-                            className="text-sm font-bold text-gray-800 hover:text-blue-600 hover:underline min-w-[2rem] text-center"
+                            disabled={isOffline}
+                            title={
+                              isOffline
+                                ? "Editing disabled while offline"
+                                : "Click to type a number"
+                            }
+                            className="text-sm font-bold text-gray-800 hover:text-blue-600 hover:underline min-w-[2rem] text-center disabled:no-underline disabled:text-gray-500 disabled:cursor-not-allowed"
                           >
                             {c.occupancy}
                           </button>
@@ -942,7 +1027,7 @@ export default function EvacuationPage() {
 
                         <button
                           onClick={() => adjust(c._id, +1)}
-                          disabled={c.occupancy >= c.capacity}
+                          disabled={isOffline || c.occupancy >= c.capacity}
                           className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors leading-none"
                         >
                           +

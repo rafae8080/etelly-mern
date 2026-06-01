@@ -118,6 +118,28 @@ const CENTER_COORDS = {
   "santacruz|Lower Sto. Nino Covered Court":                       [14.617796766951330, 121.16903861555687],
 };
 
+// ── Barangay emergency hotlines (mirrors EvacuationPage.jsx BARANGAYS) ────────
+// Served on each center so the mobile app's Call button can dial the first number.
+const BARANGAY_HOTLINES = {
+  bagongnayon:  ["0945-624-8906", "0962-391-2390"],
+  beverlyhills: ["0930-027-6922", "8518-2988", "0966-661-4839"],
+  calawis:      ["0994-833-9165"],
+  cupang:       ["0968-491-8172", "0910-524-9816", "0953-669-4295", "682-4946", "682-4837"],
+  dalig:        ["0968-491-8172", "0910-524-9816"],
+  delapaz:      ["8260-0182", "0960-604-4446"],
+  inarawan:     ["0956-084-5977"],
+  mambugan:     ["0928-776-7525", "0998-475-1517"],
+  mayamot:      ["0918-288-7373", "0939-811-1094", "8470-6121", "8470-7935", "8880-4373", "8470-8924"],
+  muntindilaw:  ["8463-0534", "0917-515-1764"],
+  sanisidro:    ["0933-829-7656", "0933-815-9319"],
+  sanjose:      ["0966-448-6020", "0915-388-9567", "8818-4641"],
+  sanjuan:      ["0968-602-8496", "8296-0453"],
+  sanluis:      ["0956-442-2732", "0967-291-4584", "0935-532-5076", "0922-420-3099", "8696-7370"],
+  sanroque:     ["0945-624-8906", "0962-391-2390"],
+  santacruz:    ["0927-687-5203", "0928-620-6373", "0951-301-2629", "0912-985-1208", "8534-1105"],
+  private:      [],
+};
+
 // Barangay-level fallback when no exact name match exists
 const BARANGAY_COORDS = {
   bagongnayon:  { lat: 14.6261, lng: 121.1687 },
@@ -659,6 +681,12 @@ router.get("/centers", protect, async (req, res) => {
         const obj = c.toObject();
         const key = `${obj.barangay}|${obj.name}`;
         const exact = CENTER_COORDS[key];
+
+        // Attach barangay hotlines + the primary number the mobile app dials.
+        const hotlines = BARANGAY_HOTLINES[obj.barangay] ?? [];
+        obj.hotlines = hotlines;
+        obj.contact = hotlines[0] ?? "";
+
         if (exact) {
           // Always use the known precise coordinate (fills in null DB coords too)
           if (obj.lat == null || obj.lng == null) {

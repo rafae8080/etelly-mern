@@ -9,17 +9,6 @@ import {
 } from "lucide-react";
 import { useOfflineCache } from "../../../hooks/useOfflineCache";
 
-function classifyPAGASA(mmPerHour) {
-  if (mmPerHour >= 60)
-    return { label: "Torrential", level: 5, color: "#7c3aed" };
-  if (mmPerHour >= 30) return { label: "Intense", level: 4, color: "#dc2626" };
-  if (mmPerHour >= 15) return { label: "Heavy", level: 3, color: "#f97316" };
-  if (mmPerHour >= 7.5)
-    return { label: "Moderate", level: 2, color: "#f59e0b" };
-  if (mmPerHour > 0) return { label: "Light", level: 1, color: "#3b82f6" };
-  return { label: "None", level: 0, color: "#9ca3af" };
-}
-
 // ── Per-level icon config ─────────────────────────────────────────────────
 // Each PAGASA level maps to a distinct lucide icon + fixed size + color token.
 // Icons chosen to intuitively convey intensity without needing bar height.
