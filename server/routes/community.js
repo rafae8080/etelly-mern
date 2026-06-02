@@ -270,11 +270,19 @@ router.post("/requests/:id/pledge", protect, async (req, res) => {
       return res.status(409).json({ success: false, error: "You already have an active pledge on this request." });
     }
 
-    const { message, phone } = req.body;
-    const profile = await User.findById(req.user.id).select("name").lean();
+    const { message, phone, pledgerLat, pledgerLng } = req.body;
+    const profile = await User.findById(req.user.id).select("name barangay").lean();
     const pledgerName = profile?.name || req.user.name || "Unknown";
 
-    request.pledges.push({ userId: req.user.id, name: pledgerName, phone: phone || null, message: message || "" });
+    request.pledges.push({
+      userId: req.user.id,
+      name: pledgerName,
+      phone: phone || null,
+      message: message || "",
+      pledgerLat: pledgerLat ?? null,
+      pledgerLng: pledgerLng ?? null,
+      pledgerBarangay: profile?.barangay || null,
+    });
     await request.save();
 
     const pledgeCount = request.pledges.filter((p) => p.status !== "withdrawn").length;

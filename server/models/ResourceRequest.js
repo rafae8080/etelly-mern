@@ -6,6 +6,12 @@ const pledgeSchema = new mongoose.Schema({
   phone:     { type: String, default: null },
   message:   { type: String, default: "" },
   status:    { type: String, enum: ["pending","accepted","declined","withdrawn"], default: "pending" },
+  // Helper's location captured when they offered, so the requester can see how
+  // far each helper is and prioritize the closest. Optional — absent if the
+  // helper denied location permission.
+  pledgerLat:      { type: Number, default: null },
+  pledgerLng:      { type: Number, default: null },
+  pledgerBarangay: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
 }, { _id: true });
 
