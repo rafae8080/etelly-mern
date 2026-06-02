@@ -3,23 +3,10 @@ import mongoose from "mongoose";
 import ResourceRequest  from "../models/ResourceRequest.js";
 import ResourceDonation from "../models/ResourceDonation.js";
 import ResourceMessage  from "../models/ResourceMessage.js";
-import InventoryItem    from "../models/InventoryItem.js";
-import InventoryLog     from "../models/InventoryLog.js";
 import Alert            from "../models/Alert.js";
 import User             from "../models/user.js";
 import { protect, requireAdminOrBarangay, optionalProtect } from "../middleware/auth.js";
-import { pushItemAlert } from "../services/inventoryAlerts.js";
 import { sendAdminNotification, sendPushToUser } from "./push.js";
-
-const DONATION_CATEGORY_MAP = {
-  food:     "Food & Water",
-  water:    "Food & Water",
-  clothing: "Other",
-  medicine: "Medical",
-  hygiene:  "Medical",
-  shelter:  "Shelter",
-  other:    "Other",
-};
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -567,17 +554,6 @@ router.patch("/requests/:id/confirm", protect, async (req, res) => {
       return res.status(400).json({ success: false, error: "Request must be in matched status to confirm." });
     }
 
-    if (request.resourceId && mongoose.Types.ObjectId.isValid(request.resourceId)) {
-      const deducted = await InventoryItem.findOneAndUpdate(
-        { _id: request.resourceId, quantity: { $gte: request.quantity } },
-        { $inc: { quantity: -request.quantity } },
-        { new: true },
-      );
-      if (!deducted) {
-        return res.status(409).json({ success: false, error: "Insufficient stock to fulfill this request." });
-      }
-    }
-
     request.status = "fulfilled";
     request.actionLog.push({ action: "fulfilled", by: req.user.name, byId: req.user.id, note: note || "" });
     await request.save();
@@ -609,17 +585,6 @@ router.patch("/requests/:id/fulfill", protect, requireAdminOrBarangay, async (re
     if (!request) return res.status(404).json({ success: false, error: "Request not found." });
     if (!["open", "pending", "approved", "matched"].includes(request.status)) {
       return res.status(400).json({ success: false, error: "Cannot force-fulfill a request in its current state." });
-    }
-
-    if (request.resourceId && mongoose.Types.ObjectId.isValid(request.resourceId)) {
-      const deducted = await InventoryItem.findOneAndUpdate(
-        { _id: request.resourceId, quantity: { $gte: request.quantity } },
-        { $inc: { quantity: -request.quantity } },
-        { new: true },
-      );
-      if (!deducted) {
-        return res.status(409).json({ success: false, error: "Insufficient stock to fulfill this request." });
-      }
     }
 
     request.status = "fulfilled";
@@ -891,59 +856,6 @@ router.patch("/donations/:id/receive", protect, requireAdminOrBarangay, async (r
 
     const io = req.app.get("io");
     if (io) io.emit("community_donation_updated", { id: donation._id, status: donation.status });
-
-    // ── Auto-transfer to inventory ──────────────────────────────────────────
-    try {
-      const donorLabel   = donation.donorName?.trim() || "Anonymous";
-      const inventoryCat = DONATION_CATEGORY_MAP[donation.category] ?? "Other";
-      const nameRegex    = new RegExp(`^${escapeRegex(donation.itemDescription)}$`, "i");
-
-      const existing = await InventoryItem.findOne({ barangay: donation.barangay, name: nameRegex });
-
-      if (existing) {
-        const prevQty = existing.quantity;
-        existing.quantity  += donation.quantity;
-        existing.donatedBy  = [...(existing.donatedBy ?? []), donorLabel];
-        await existing.save();
-
-        await InventoryLog.create({
-          itemId:        existing._id,
-          itemName:      existing.name,
-          barangay:      existing.barangay,
-          action:        "item_updated",
-          field:         "quantity (donation)",
-          previousValue: prevQty,
-          newValue:      existing.quantity,
-          user: { id: req.user.id, name: req.user.name },
-        });
-
-        pushItemAlert(existing).catch(() => {});
-      } else {
-        const created = await InventoryItem.create({
-          name:        donation.itemDescription,
-          category:    inventoryCat,
-          quantity:    donation.quantity,
-          unit:        donation.unit,
-          minQuantity: 0,
-          barangay:    donation.barangay,
-          expiryDate:  null,
-          donatedBy:   [donorLabel],
-        });
-
-        await InventoryLog.create({
-          itemId:   created._id,
-          itemName: created.name,
-          barangay: created.barangay,
-          action:   "item_created",
-          newValue: donation.quantity,
-          user: { id: req.user.id, name: req.user.name },
-        });
-
-        pushItemAlert(created).catch(() => {});
-      }
-    } catch (invErr) {
-      console.error("[Community] Inventory transfer failed:", invErr.message);
-    }
 
     res.json({ success: true, donation });
   } catch (err) {
